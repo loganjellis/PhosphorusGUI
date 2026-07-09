@@ -20,7 +20,8 @@ target_compile_definitions(phosphorus_gui PRIVATE $<$<BOOL:${BUILD_SHARED_LIBS}>
 
 target_include_directories(phosphorus_gui PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
-target_link_libraries(phosphorus_gui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/lib/libtimey.dll.a" "${CMAKE_CURRENT_SOURCE_DIR}/lib/libvibrant_logs.dll.a")
+target_link_libraries(phosphorus_gui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/lib/libtimey.dll.a" "${CMAKE_CURRENT_SOURCE_DIR}/lib/libvibrant_logs.dll.a"
+											"${CMAKE_CURRENT_SOURCE_DIR}/lib/libraylibdll.a")
 
 add_executable(phos_gui_test "${CMAKE_CURRENT_SOURCE_DIR}/example.c")
 target_link_libraries(phos_gui_test PRIVATE phosphorus_gui)
