@@ -4,6 +4,13 @@
 int main(void)
 {
 	vl_init();
+
+	vl_config *vlcfg = vl_curr_config();
+	vlcfg -> log_level = VL_ERROR;
+	vlcfg -> print_date = false;
+	vlcfg -> print_month_name = false;
+	vlcfg -> print_time = true;
+
 	phos_gui_init();
 
 	InitWindow(720, 720, "Test");
@@ -12,39 +19,24 @@ int main(void)
 	phos_gui gui = {0};
 	gui.num_elems = 0;
 
-	phos_gui_elem elem = {0};
-	elem.type = PHOS_GUI_BUTTON;
-	elem.shape = PHOS_GUI_ELLIPSE;
-	elem.render_mode = PHOS_GUI_OUTLINE;
-	strcpy(elem.id, "<auto-gen>");
-	phos_gui_set_elem_bounds(&elem, 50, 50, 150, 300);
-	phos_gui_gen_elem_colors(&elem, WHITE, -0.25f, -0.4f);
-	phos_gui_set_elem_outline(&elem, BLACK, 10.0f);
-	elem.text.font = phos_gui_load_font("../test_font.ttf");
-	elem.text.font_size = 18;
-	elem.text.color = BLACK;
-	elem.text.editable = false;
-	phos_gui_set_text_contents(&elem, "HELLO!");
-	elem.text.pos = phos_gui_get_elem_center_with_text(&elem);
+	phos_gui_elem elem1 = (phos_gui_elem) {0};
+	strcpy(elem1.id, "<auto-gen>");
+	phos_gui_add_elem(&gui, &elem1);
 
-	phos_gui_add_elem(&gui, &elem);
-
-	phos_gui_elem elem2 = (phos_gui_elem) {0};
-	elem2.type = PHOS_GUI_TEXT_FIELD;
-	elem2.text.max_len = 10;
-	elem2.text.len = 0;
-	strcpy(elem2.id, "<auto-gen>");
-	phos_gui_set_elem_bounds(&elem2, 200, 300, 300, 150);
-	phos_gui_gen_elem_colors(&elem2, WHITE, -0.25f, -0.4f);
-	elem2.bg_texture = phos_gui_load_texture("../test_btn.png");
-	elem2.text.font = phos_gui_load_font("../test_font.ttf");
-	strcpy(elem2.text.placeholder_str, "Enter text here:");
-	elem2.text.placeholder_color = GRAY;
-	elem2.text.color = BLACK;
-	elem2.text.font_size = 20;
-	elem2.text.pos = phos_gui_align(&elem2, PHOS_GUI_ALIGN_LEFT, 5.0f, -phos_gui_get_text_bounds(&elem2, elem2.text.placeholder_str).height / 2.0f);
-
-	phos_gui_add_elem(&gui, &elem2);
+	elem1.type = PHOS_GUI_TEXT_FIELD;
+	phos_gui_set_elem_bounds(&elem1, 200, 300, 300, 150);
+	phos_gui_gen_elem_colors(&elem1, WHITE, -0.25f, -0.4f);
+	elem1.bg_texture = phos_gui_load_texture("../test_btn.png");
+	elem1.text.font = phos_gui_load_font("../test_font.ttf");
+	phos_gui_init_text(&elem1, "", 32.0f, BLACK);
+	phos_gui_init_placeholder_text(&elem1, "Enter name:", GRAY);
+	elem1.text.max_len = 30;
+	elem1.left_padding = 8.5f;
+	elem1.right_padding = -30.0f;
+	Rectangle text_bounds = phos_gui_get_text_bounds(&elem1, elem1.text.placeholder_str);
+	elem1.text.pos = phos_gui_align(&elem1, PHOS_GUI_ALIGN_LEFT, elem1.left_padding, -text_bounds.height / 2.0f);
+	elem1.text.accept_nums = false;
+	elem1.text.accept_specials = false;
 
 	while(!WindowShouldClose())
 	{

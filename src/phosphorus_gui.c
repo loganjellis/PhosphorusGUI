@@ -3,6 +3,11 @@
 #include "dynamic_array_spellbook.h"
 #include "vibrant_logs.h"
 #include "phosphorus_gui.h"
+#include "raymath.h"
+
+#define PHOS_GUI_CURSOR_WIDTH 3
+#define PHOS_GUI_KEY_REPEAT_DELAY 0.5f
+#define PHOS_GUI_KEY_REPEAT_INTERVAL 0.033f
 
 // array of element pointers
 typedef struct phos_gui_elem_arr
@@ -43,7 +48,7 @@ typedef struct phos_gui_font_arr
 typedef struct phos_gui_event_listener
 {
 	phos_gui_elem *target;
-	bool *event;
+	phos_gui_event_listener_condition event;
 	phos_gui_event_listener_action action;
 } phos_gui_event_listener;
 
@@ -63,6 +68,21 @@ static phos_gui_font_arr fonts;
 // for elements with "<auto-gen>" ID, ensures unique auto-generated IDs
 static int phos_gui_auto_id = 0;
 
+// keyboard input
+typedef struct phos_gui_key_timer
+{
+	// what key is being used?
+	int key;
+	// time left
+	float timer;
+	// is the key down?
+	bool active;
+} phos_gui_key_timer;
+
+static phos_gui_key_timer backspace_timer = {0};
+static phos_gui_key_timer left_arrow_timer = {0};
+static phos_gui_key_timer right_arrow_timer = {0};
+
 
 void phos_gui_init()
 {
@@ -76,6 +96,10 @@ void phos_gui_init()
 	dynas_init(&event_listeners);
 	dynas_init(&textures);
 	dynas_init(&fonts);
+
+	backspace_timer.key = KEY_BACKSPACE;
+	left_arrow_timer.key = KEY_LEFT;
+	right_arrow_timer.key = KEY_RIGHT;
 
 	init = true;
 }
@@ -171,35 +195,63 @@ Vector2 phos_gui_get_elem_center_with_text(phos_gui_elem *elem)
 	return v;
 }
 
-Rectangle phos_gui_get_text_bounds(phos_gui_elem *elem, const char *str)
+Rectangle phos_gui_get_elem_rect(const phos_gui_elem *const elem)
 {
 	Rectangle r = {0};
 
 	if(!elem)
 	{
-		vl_log(VL_ERROR, "Cannot obtain text bounds for null UI element!\n");
+		vl_log(VL_ERROR, "Cannot obtain rectangle bounds for a null UI element!\n");
+		return r;
+	}
+
+	r.x = elem -> pos.x + elem -> left_padding;
+	r.y = elem -> pos.y + elem -> top_padding;
+	r.width = elem -> size.x + elem -> right_padding;
+	r.height = elem -> size.y + elem -> bottom_padding;
+
+	return r;
+}
+
+Rectangle phos_gui_get_text_bounds(const phos_gui_elem *const elem, const char *str)
+{
+	Rectangle r = {0};
+
+	if(!elem)
+	{
+		vl_delay_log(VL_ERROR, 1.0f, "Cannot obtain text bounds for null UI element!\n");
+		return r;
+	}
+	if(!str)
+	{
+		vl_delay_log(VL_ERROR, 1.0f, "Cannot obtain text bounds for null string!\n");
+		return r;
+	}
+	if(strlen(str) == 0)
+	{
+		vl_delay_log(VL_WARNING, 5.0f, "Cannot obtain text bounds for empty text on element: '%s'!\n", elem -> id);
 		return r;
 	}
 	if(!elem -> text.font || !IsFontValid(*elem -> text.font) || elem -> text.font_size <= 0.0f)
 	{
-		vl_log(VL_ERROR, "Cannot obtain text bounds for invalid font on element: '%s'!\n", elem -> id);
-		return r;
-	}
-	if(strlen(elem -> text.str) == 0)
-	{
-		vl_log(VL_WARNING, "Cannot obtain text bounds for empty text on element: '%s'!\n", elem -> id);
+		vl_delay_log(VL_ERROR, 1.0f, "Cannot obtain text bounds for invalid font on element: '%s'!\n", elem -> id);
 		return r;
 	}
 
 	// width and height of the text
 	Vector2 text_size = MeasureTextEx(*elem -> text.font, str, elem -> text.font_size, 0.0f);
 
+	if(text_size.x == 0 || text_size.y == 0)
+	{
+		vl_delay_log(VL_ERROR, 2.5f, "Invalid text bounds; width and height must exceed 0!\n");
+		return r;
+	}
+
 	r.width = text_size.x;
 	r.height = text_size.y;
 
-	// TODO add padding to element struct?
-	r.x = elem -> pos.x;
-	r.y = elem -> pos.y;
+	r.x = elem -> pos.x + elem -> left_padding;
+	r.y = elem -> pos.y + elem -> top_padding;
 
 	return r;
 }
@@ -235,6 +287,7 @@ void phos_gui_init_text(phos_gui_elem *elem, const char *str, float font_size, C
 	elem -> text.editable = true;
 	elem -> text.edited = false;
 	elem -> text.cursor_pos = elem -> text.len;
+	elem -> text.accept_letters = elem -> text.accept_nums = elem -> text.accept_specials = true;
 }
 void phos_gui_init_placeholder_text(phos_gui_elem *elem, const char *str, Color color)
 {
@@ -346,7 +399,7 @@ Vector2 phos_gui_align(phos_gui_elem *elem, phos_gui_alignment alignment, float 
 	switch(alignment)
 	{
 		case PHOS_GUI_ALIGN_LEFT:
-			v.x = elem -> pos.x + pad_x;
+			v.x = elem -> pos.x + elem -> left_padding;
 			v.y = elem -> pos.y + elem -> size.y / 2.0f + pad_y;
 			break;
 	}
@@ -354,7 +407,7 @@ Vector2 phos_gui_align(phos_gui_elem *elem, phos_gui_alignment alignment, float 
 	return v;
 }
 
-void phos_gui_add_event_listener(phos_gui_elem *elem, bool *event, phos_gui_event_listener_action action)
+void phos_gui_add_event_listener(phos_gui_elem *elem, phos_gui_event_listener_condition event, phos_gui_event_listener_action action)
 {
 	if(!elem)
 	{
@@ -372,7 +425,8 @@ void phos_gui_add_event_listener(phos_gui_elem *elem, bool *event, phos_gui_even
 		return;
 	}
 
-	// TODO
+	phos_gui_event_listener el = { .target = elem, .event = event, .action = action };
+	dynas_add(&event_listeners, el);
 }
 
 PHOS_GUI_API int phos_gui_register_elem(phos_gui_elem *elem)
@@ -385,6 +439,11 @@ PHOS_GUI_API int phos_gui_register_elem(phos_gui_elem *elem)
 	if(!init)
 	{
 		vl_log(VL_ERROR, "Cannot register element, phos_gui_init() was never called!\n");
+		return 0;
+	}
+	if(strlen(elem -> id) == 0)
+	{
+		vl_log(VL_ERROR, "Cannot register element with empty ID!\n");
 		return 0;
 	}
 
@@ -477,8 +536,55 @@ phos_gui_elem *phos_gui_get_elem(const char *ID)
 	return NULL;
 }
 
+static void phos_gui_move_cursor_left(phos_gui_elem *e)
+{
+	if(e -> text.cursor_pos > 0)
+		e -> text.cursor_pos--;
+}
+static void phos_gui_move_cursor_right(phos_gui_elem *e)
+{
+	if(e -> text.cursor_pos < e -> text.len)
+		e -> text.cursor_pos++;
+}
+static void phos_gui_backspace(phos_gui_elem *e)
+{
+	if(e -> text.len > 0)
+	{
+		e -> text.str[--e -> text.len] = '\0';
+		e -> text.cursor_pos--;
+		e -> text.edited = true;
+	}
+}
+static void phos_gui_update_key_timer(phos_gui_elem *e, float dt, phos_gui_key_timer *kt, void (*action) (phos_gui_elem*))
+{
+	if(IsKeyDown(kt -> key))
+	{
+		if(!kt -> active)
+		{
+			action(e);
+			kt -> timer = PHOS_GUI_KEY_REPEAT_DELAY;
+		}
+		else
+		{
+			kt -> timer -= dt;
+
+			if(kt -> timer <= 0.0f)
+			{
+				action(e);
+				kt -> timer = PHOS_GUI_KEY_REPEAT_INTERVAL;
+			}
+		}
+
+		kt -> active = true;
+	}
+	else
+		kt -> active = false;
+}
+
 static void phos_gui_update_elem(phos_gui_elem *e)
 {
+	float dt = GetFrameTime();
+
 	// get mouse information
 	Vector2 mouse_pos = GetMousePosition();
 
@@ -525,39 +631,109 @@ static void phos_gui_update_elem(phos_gui_elem *e)
 	// check type of element:
 	if(e -> type == PHOS_GUI_TEXT_FIELD)
 	{
+		// reset 'edited' field
+		e -> text.edited = false;
+
 		// only type into text field if it has focus
 		if(e -> has_focus)
 		{
+			// collect key
 			int k = GetKeyPressed();
 			e -> text.key_typed = k;
 
-			if(k != KEY_NULL)
-				e -> text.edited = true;
-			else
-				e -> text.edited = false;
+			// collect every char typed:
+			char c = GetCharPressed();
+			
+			while(c > 0)
+			{
+				// get type of c
+				bool letter = isalpha(c);
+				bool num = isdigit(c);
+				bool special = !letter & !num;
 
-			// check for valid key
-			if(k > KEY_NULL && isprint(k))
-			{
-				char ch = (char) k;
-				// add char to end of string (if possible)
-				if(e -> text.len < e -> text.max_len && e -> text.len < PHOS_GUI_MAX_TEXT_LEN)
+				// see if text field accepts this type of char
+				if(letter && !e -> text.accept_letters)
 				{
-					e -> text.str[e -> text.len++] = ch;
-					e -> text.str[e -> text.len] = '\0';
-					e -> text.cursor_pos++;
+					c = GetCharPressed();
+					continue;
 				}
-			}
-			else if(k == KEY_BACKSPACE)
-			{
-				// remove last typed char
-				if(e -> text.len > 0)
+				if(num && !e -> text.accept_nums)
 				{
-					e -> text.str[--e -> text.len] = '\0';
-					e -> text.cursor_pos--;
+					c = GetCharPressed();
+					continue;
 				}
+				// let ' ' through the special char check
+				if(special && !e -> text.accept_specials && c != ' ')
+				{
+					c = GetCharPressed();
+					continue;
+				}
+
+				// assign char typed
+				e -> text.char_typed = c;
+
+				// insert char into string at cursor pos (if possible)
+				if(e -> text.len + 1 <= e -> text.max_len && e -> text.len + 1 < PHOS_GUI_MAX_TEXT_LEN)
+				{
+					// first, move all chars at cursor pos one slot over to the right
+					memmove(e -> text.str + e -> text.cursor_pos + 1, e -> text.str + e -> text.cursor_pos, e -> text.len - e -> text.cursor_pos + 1);
+
+					// insert char and move to next cursor pos
+					e -> text.str[e -> text.cursor_pos++] = c;
+
+					// increase string length by one
+					e -> text.len++;
+
+					e -> text.edited = true;
+				}
+
+				// get next char pressed
+				c = GetCharPressed();
 			}
+
+			phos_gui_update_key_timer(e, dt, &backspace_timer, phos_gui_backspace);
+			phos_gui_update_key_timer(e, dt, &left_arrow_timer, phos_gui_move_cursor_left);
+			phos_gui_update_key_timer(e, dt, &right_arrow_timer, phos_gui_move_cursor_right);
 		}
+		else
+		{
+			e -> text.edited = false;
+		}
+
+		// handle text-scrolling:
+
+		// first get visual bounds of text component on screen
+		Rectangle vis_bounds = phos_gui_get_elem_rect(e);
+
+		// get bounds of text
+		Rectangle text_bounds = phos_gui_get_text_bounds(e, e -> text.str);
+
+		// calculate the overflow
+		float overflow = text_bounds.width - vis_bounds.width;
+
+		if(overflow > 0.0f)
+			e -> text.max_scroll = overflow;
+		else
+		{
+			e -> text.max_scroll = 0.0f;
+			e -> text.scroll = 0.0f;
+		}
+
+		float vis_width = vis_bounds.width + e -> left_padding + e -> right_padding;
+
+		char buf[PHOS_GUI_MAX_TEXT_LEN + 1];
+		memcpy(buf, e -> text.str, e -> text.cursor_pos);
+		buf[e -> text.cursor_pos] = '\0';
+
+		float caret_x = MeasureTextEx(*e -> text.font, buf, e -> text.font_size, 0.0f).x;
+
+		if(caret_x - e -> text.scroll > vis_width)
+			e -> text.scroll = caret_x - vis_width;
+
+		if(caret_x < e -> text.scroll)
+			e -> text.scroll = caret_x;
+
+		e -> text.scroll = Clamp(e -> text.scroll, 0.0f, e -> text.max_scroll);
 	}
 }
 // TODO create phos_gui_update function for specific window scaling so GetMousePosition() always works!!
@@ -569,8 +745,18 @@ void phos_gui_update(phos_gui *gui)
 		return;
 	}
 
+	// update elems:
 	for(size_t i = 0; i < gui -> num_elems; ++i)
 		phos_gui_update_elem(gui -> elems[i]);
+
+	// update event listeners
+	for(size_t i = 0; i < event_listeners.size; ++i)
+	{
+		// eval condition
+		bool exec = event_listeners.data[i].event(event_listeners.data[i].target);
+		if(exec)
+			event_listeners.data[i].action(event_listeners.data[i].target);
+	}
 }
 
 static void phos_gui_render_elem(const phos_gui_elem *const e)
@@ -647,11 +833,36 @@ static void phos_gui_render_elem(const phos_gui_elem *const e)
 					DrawTextEx(*e -> text.font, e -> text.str, e -> text.pos, e -> text.font_size, 0.0f, e -> text.color);
 					break;
 				case PHOS_GUI_TEXT_FIELD:
+					// calculate where to draw the text
+					Vector2 draw_pos = e -> text.pos;
+					draw_pos.x -= e -> text.scroll;
+
+					// begin scissor mode to cut off text that has been scrolled off
+					BeginScissorMode(e -> pos.x, e -> pos.y, e -> size.x, e -> size.y);
+
 					// determine if text field's main text, or placeholder text should be rendered
 					if(strlen(e -> text.str) == 0 && strlen(e -> text.placeholder_str) > 0)
-						DrawTextEx(*e -> text.font, e -> text.placeholder_str, e -> text.pos, e -> text.font_size, 0.0f, e -> text.placeholder_color);
+						DrawTextEx(*e -> text.font, e -> text.placeholder_str, draw_pos, e -> text.font_size, 0.0f, e -> text.placeholder_color);
 					else
-						DrawTextEx(*e -> text.font, e -> text.str, e -> text.pos, e -> text.font_size, 0.0f, e -> text.color);
+						DrawTextEx(*e -> text.font, e -> text.str, draw_pos, e -> text.font_size, 0.0f, e -> text.color);
+
+					Rectangle vis_bounds = phos_gui_get_elem_rect(e);
+					float vis_width = vis_bounds.width - e -> left_padding - e -> right_padding;
+
+					// render cursor (only if placeholder text is not being rendered and text field has focus)
+					if(strlen(e -> text.str) > 0 && e -> has_focus)
+					{
+						char buf[PHOS_GUI_MAX_TEXT_LEN + 1];
+						memcpy(buf, e -> text.str, e -> text.cursor_pos);
+						buf[e -> text.cursor_pos] = '\0';
+
+						float caret_x = MeasureTextEx(*e -> text.font, buf, e -> text.font_size, 0.0f).x;
+
+						float cx = e -> pos.x + e -> left_padding + caret_x + PHOS_GUI_CURSOR_WIDTH - e -> text.scroll;
+						DrawRectangle(cx, e -> text.pos.y, PHOS_GUI_CURSOR_WIDTH, e -> text.font_size, e -> text.color);
+					}
+
+					EndScissorMode();
 					break;
 			}
 		}

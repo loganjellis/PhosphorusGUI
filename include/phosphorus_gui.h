@@ -172,6 +172,22 @@ typedef struct phos_gui_text_component
 	float font_size;
 
 	/**
+	  How much the text has been scrolled horizontally.
+
+	  When the user types enough characters and they
+	  reach the right side of the text's visual
+	  bounds, the text will start to scroll. This value
+	  represents how much it has been scrolled so far.
+	*/
+	float scroll;
+	/**
+	  The max amount of pixels to be scrolled.
+
+	  @see scroll
+	*/
+	float max_scroll;
+
+	/**
 	  The color of the text component's main contents ('str').
 	*/
 	Color color;
@@ -184,10 +200,14 @@ typedef struct phos_gui_text_component
 	  The last key the user typed into this text component.
 
 	  If there was no character typed, it will be equal to KEY_NULL.
-
-	  @note To convert to a char, cast it to (char).
 	*/
 	int key_typed;
+	/**
+	  The last char the user typed into this text component.
+
+	  If there was no character typed, it will be equal to KEY_NULL.
+	*/
+	char char_typed;
 
 	/**
 	  Whether or not the user can edit this text component.
@@ -195,10 +215,24 @@ typedef struct phos_gui_text_component
 	bool editable;
 	/**
 	  Whether or not the text field was edited by the user this frame.
+
+	  Hitting a key like the enter key does not mark the text field
+	  as edited. Only updating the contents of the text marks
+	  it as edited.
 	*/
 	bool edited;
-	
-	// TODO implement acceptance fields (accepts_chars, accepts_nums, accepts_special_chars, etc)
+	/**
+	  Whether or not letters are accepted in this text field's input.
+	*/
+	bool accept_letters;
+	/**
+	  Whether or not numbers are accepted in this text field's input.
+	*/
+	bool accept_nums;
+	/**
+	  Whether or not special characters are accepted in this text field's input.
+	*/
+	bool accept_specials;
 } phos_gui_text_component;
 
 /**
@@ -310,6 +344,23 @@ typedef struct phos_gui_elem
 	float outline_thickness;
 
 	/**
+	  Padding on the top side of the element.
+	*/
+	float top_padding;
+	/**
+	  Padding on the left side of the element.
+	*/
+	float left_padding;
+	/**
+	  Padding on the right side of the element.
+	*/
+	float right_padding;
+	/**
+	  Padding on the bottom side of the element.
+	*/
+	float bottom_padding;
+
+	/**
 	  Determines if this element has focus.
 
 	  An element gains focus when the user clicks
@@ -335,6 +386,14 @@ typedef struct phos_gui_elem
 	bool pressed;
 } phos_gui_elem;
 
+/**
+  An alias for a function pointer used by PhosphorusGUI
+  in event listeners.
+
+  The function should return a boolean, and it takes in
+  the target element of the event listener.
+*/
+typedef bool (*phos_gui_event_listener_condition) (phos_gui_elem*);
 /**
   An alias for a function pointer used by PhosphorusGUI
   in event listeners.
@@ -404,13 +463,18 @@ PHOS_GUI_API Vector2 phos_gui_get_elem_center(phos_gui_elem *elem);
 PHOS_GUI_API Vector2 phos_gui_get_elem_center_with_text(phos_gui_elem *elem);
 
 /**
+  Returns the bounds of an element.
+*/
+PHOS_GUI_API Rectangle phos_gui_get_elem_rect(const phos_gui_elem *const elem);
+
+/**
   Returns the bounds of an element's text component.
 
   @note Because an element contains primary text ('str') and
   placeholder text ('placeholder_str'), you must also pass
   the target string to use.
 */
-PHOS_GUI_API Rectangle phos_gui_get_text_bounds(phos_gui_elem *elem, const char *str);
+PHOS_GUI_API Rectangle phos_gui_get_text_bounds(const phos_gui_elem *const elem, const char *str);
 
 /**
   Initializes an element's text component.
@@ -474,12 +538,12 @@ PHOS_GUI_API Vector2 phos_gui_align(phos_gui_elem *elem, phos_gui_alignment alig
   listeners added through this function.
 
   @param elem The element to add a listener to.
-  @param eval The boolean value, or the event. This value
-  is checked by PhosphorusGUI to update and execute the event listener.
-  @param action The phos_gui_event_listener_action to execute when the
-  boolean value given is true.
+  @param event The condition of the event. This is a function
+  that is executed to determine if the action should execute.
+  @param action The action to execute when the condition of
+  the event listener is true.
 */
-PHOS_GUI_API void phos_gui_add_event_listener(phos_gui_elem *elem, bool *event, phos_gui_event_listener_action action);
+PHOS_GUI_API void phos_gui_add_event_listener(phos_gui_elem *elem, phos_gui_event_listener_condition event, phos_gui_event_listener_action action);
 
 /**
   Registers a UI element using the element's ID.
