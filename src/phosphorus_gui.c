@@ -111,7 +111,7 @@ void phos_gui_shutdown()
 		return;
 	}
 
-	dynas_free(&elem_registry);
+	dynas_free(&elem_registry); 
 	dynas_free(&event_listeners);
 
 	// unload every texture loaded
@@ -289,6 +289,66 @@ Rectangle phos_gui_get_text_bounds(const phos_gui_elem *const elem, const char *
 	return r;
 }
 
+static void phos_gui_update_text_scrolling(phos_gui_elem *e)
+{
+	// first determine whether or not to use text.str or text.placeholder_str
+	const char *str = NULL;
+	if(strlen(e -> text.str) > 0)
+		str = e -> text.str;
+	else if(strlen(e -> text.placeholder_str) > 0)
+		str = e -> text.placeholder_str;
+	else
+	{
+		e -> text.scroll = 0.0f;
+		e -> text.max_scroll = 0.0f;
+		vl_delay_log(VL_WARNING, 5.0f, "Failed to update text scrolling. Text component must contain string data to calculate!\n");
+		return;
+	}
+
+	// first get visual bounds of text component on screen
+	Rectangle vis_bounds = phos_gui_get_visible_elem_rect(e);
+
+	// get bounds of text
+	Rectangle text_bounds = phos_gui_get_text_bounds(e, str);
+
+	// calculate the overflow
+	float vis_left = vis_bounds.x + e -> left_padding;
+	float vis_right = vis_bounds.x + vis_bounds.width - e -> right_padding;
+	float vis_width = vis_right - e -> text.pos.x;
+	float overflow = text_bounds.width - vis_width;
+
+	if(overflow > 0.0f)
+	{
+		e -> text.max_scroll = overflow;
+	}
+	else
+	{
+		e -> text.max_scroll = 0.0f;
+		e -> text.scroll = 0.0f;
+	}
+
+	// only handle caret logic for the editable string:
+	if(strlen(e -> text.str) > 0)
+	{
+		char buf[PHOS_GUI_MAX_TEXT_LEN + 1];
+		memcpy(buf, e -> text.str, e -> text.cursor_pos);
+		buf[e -> text.cursor_pos] = '\0';
+
+		float caret_x = MeasureTextEx(*e -> text.font, buf, e -> text.font_size, 0.0f).x;
+		float caret_screen = e -> text.pos.x + caret_x - e -> text.scroll;
+
+		// right-side check (include cursor width because the cursor takes up that many more pixels)
+		if(caret_screen + PHOS_GUI_CURSOR_WIDTH > vis_right)
+			e -> text.scroll += (caret_screen + PHOS_GUI_CURSOR_WIDTH) - vis_right;
+
+		// left-side check (don't include cursor width)
+		if(caret_screen < vis_left)
+			e -> text.scroll -= vis_left - caret_screen;
+	}
+
+	e -> text.scroll = Clamp(e -> text.scroll, 0.0f, e -> text.max_scroll);
+}
+
 void phos_gui_init_text(phos_gui_elem *elem, const char *str, float font_size, Color color)
 {
 	if(!elem)
@@ -412,24 +472,24 @@ void phos_gui_gen_elem_colors(phos_gui_elem *elem, Color default_color, float ho
 	elem -> press_color = ColorBrightness(elem -> color, press_color_factor);
 }
 
-void phos_gui_set_text_contents(phos_gui_elem *elem, const char *str)
+void phos_gui_set_text_contents(phos_gui_elem *elem, char *target_str, const char *str)
 {
 	if(!elem)
 	{
 		vl_log(VL_ERROR, "Cannot set string contents of a null UI element!\n");
 		return;
 	}
-	if(!str)
+	if(!target_str || !str)
 	{
 		vl_log(VL_ERROR, "String is null, cannot set UI element's text contents!\n");
 		return;
 	}
 
-	strcpy(elem -> text.str, str);
-	elem -> text.cursor_pos = strlen(str);
+	strcpy(target_str, str);
+	elem -> text.cursor_pos = strlen(target_str);
 }
 
-Vector2 phos_gui_align(phos_gui_elem *elem, phos_gui_alignment alignment)
+Vector2 phos_gui_align(phos_gui_elem *elem, phos_gui_alignment alignment, Vector2 object_size)
 {
 	Vector2 v = {0};
 
@@ -439,18 +499,52 @@ Vector2 phos_gui_align(phos_gui_elem *elem, phos_gui_alignment alignment)
 		return v;
 	}
 
+	// define rectangle bounds for element using padding
+	float content_top = elem -> pos.y + elem -> top_padding;
+	float content_left = elem -> pos.x + elem -> left_padding;
+	float content_bottom = elem -> pos.y + elem -> size.y - elem -> bottom_padding;
+	float content_right = elem -> pos.x + elem -> size.x - elem -> right_padding;
+	float content_width = content_right - content_left;
+	float content_height = content_bottom - content_top;
+
 	switch(alignment)
 	{
-		case PHOS_GUI_ALIGN_LEFT:
-			v.x = elem -> pos.x + elem -> left_padding;
-			v.y = elem -> pos.y + elem -> size.y / 2.0f + elem -> top_padding;
+		case PHOS_GUI_ALIGN_INNER_TOP:
+			v.x = content_left + (content_width - object_size.x) / 2.0f;
+			v.y = content_top;
 			break;
-		case PHOS_GUI_ALIGN_RIGHT:
-			v.x = elem -> pos.x + elem -> size.x - elem -> left_padding - elem -> right_padding;
-			v.y = elem -> pos.y + elem -> size.y / 2.0f - elem -> top_padding - elem -> bottom_padding;
+		case PHOS_GUI_ALIGN_INNER_LEFT:
+			v.x = content_left;
+			v.y = content_top + (content_height - object_size.y) / 2.0f;
+			break;
+		case PHOS_GUI_ALIGN_INNER_RIGHT:
+			v.x = content_right - object_size.x;
+			v.y = content_top + (content_height - object_size.y) / 2.0f;
+			break;
+		case PHOS_GUI_ALIGN_INNER_BOTTOM:
+			v.x = content_left + (content_width - object_size.x)  / 2.0f;
+			v.y = content_bottom - object_size.y;
+			break;
+		case PHOS_GUI_ALIGN_INNER_CENTER:
+			v.x = content_left + (content_width - object_size.x) / 2.0f;
+			v.y = content_top + (content_height - object_size.y) / 2.0f;
 			break;
 	}
 
+	return v;
+}
+Vector2 phos_gui_align_text(phos_gui_elem *elem, phos_gui_alignment alignment, const char *target_str)
+{
+	Vector2 v = {0};
+
+	if(!elem)
+	{
+		vl_log(VL_ERROR, "Cannot align text on null UI element!\n");
+		return v;
+	}
+
+	Rectangle elem_text_size = phos_gui_get_text_bounds(elem, target_str);
+	v = phos_gui_align(elem, alignment, (Vector2) { elem_text_size.width, elem_text_size.height });
 	return v;
 }
 
@@ -474,6 +568,20 @@ void phos_gui_add_event_listener(phos_gui_elem *elem, phos_gui_event_listener_co
 
 	phos_gui_event_listener el = { .target = elem, .event = event, .action = action };
 	dynas_add(&event_listeners, el);
+}
+
+void phos_gui_set_elem_padding(phos_gui_elem *elem, float top, float left, float bottom, float right)
+{
+	if(!elem)
+	{
+		vl_log(VL_ERROR, "Cannot set padding on a null UI element!\n");
+		return;
+	}
+
+	elem -> top_padding = top;
+	elem -> left_padding = left;
+	elem -> bottom_padding = bottom;
+	elem -> right_padding = right;
 }
 
 PHOS_GUI_API int phos_gui_register_elem(phos_gui_elem *elem)
@@ -741,45 +849,11 @@ static void phos_gui_update_elem(phos_gui_elem *e, float dt)
 			phos_gui_update_key_timer(e, dt, &right_arrow_timer, phos_gui_move_cursor_right);
 		}
 		else
-		{
 			e -> text.edited = false;
-		}
 
-		// handle text-scrolling:
-
-		// first get visual bounds of text component on screen
-		Rectangle vis_bounds = phos_gui_get_visible_elem_rect(e);
-
-		// get bounds of text
-		Rectangle text_bounds = phos_gui_get_text_bounds(e, e -> text.str);
-
-		// calculate the overflow
-		float vis_width = vis_bounds.width - e -> left_padding - e -> right_padding;
-		float overflow = text_bounds.width - vis_width;
-
-		if(overflow > 0.0f)
-			e -> text.max_scroll = overflow;
-		else
-		{
-			e -> text.max_scroll = 0.0f;
-			e -> text.scroll = 0.0f;
-		}
-
-		char buf[PHOS_GUI_MAX_TEXT_LEN + 1];
-		memcpy(buf, e -> text.str, e -> text.cursor_pos);
-		buf[e -> text.cursor_pos] = '\0';
-
-		float caret_x = MeasureTextEx(*e -> text.font, buf, e -> text.font_size, 0.0f).x;
-
-		// right-side check (include cursor width because the cursor takes up that many more pixels)
-		if(caret_x + PHOS_GUI_CURSOR_WIDTH - e -> text.scroll > vis_width)
-			e -> text.scroll = caret_x + PHOS_GUI_CURSOR_WIDTH - vis_width;
-
-		// left-side check (don't include cursor width)
-		if(caret_x < e -> text.scroll)
-			e -> text.scroll = caret_x;
-
-		e -> text.scroll = Clamp(e -> text.scroll, 0.0f, e -> text.max_scroll);
+		// update text scrolling if edited
+		if(e -> text.edited)
+			phos_gui_update_text_scrolling(e);
 	}
 }
 // TODO create phos_gui_update function for specific window scaling so GetMousePosition() always works!!
@@ -850,6 +924,9 @@ static void phos_gui_render_elem(const phos_gui_elem *const e)
 			vl_delay_log(VL_WARNING, 1.0f, "This element's ('%s') text component will not render correctly due to invalid font size, or the color's alpha is 0!\n", e -> id);
 		else
 		{
+			// begin scissor mode to cut off text that has been scrolled off
+			BeginScissorMode(vis_bounds.x, vis_bounds.y, vis_bounds.width, vis_bounds.height);
+
 			switch(e -> type)
 			{
 				case PHOS_GUI_BUTTON:
@@ -860,16 +937,11 @@ static void phos_gui_render_elem(const phos_gui_elem *const e)
 					Vector2 draw_pos = e -> text.pos;
 					draw_pos.x -= e -> text.scroll;
 
-					// begin scissor mode to cut off text that has been scrolled off
-					BeginScissorMode(vis_bounds.x, vis_bounds.y, vis_bounds.width, vis_bounds.height);
-
 					// determine if text field's main text, or placeholder text should be rendered
 					if(strlen(e -> text.str) == 0 && strlen(e -> text.placeholder_str) > 0)
 						DrawTextEx(*e -> text.font, e -> text.placeholder_str, draw_pos, e -> text.font_size, 0.0f, e -> text.placeholder_color);
 					else
 						DrawTextEx(*e -> text.font, e -> text.str, draw_pos, e -> text.font_size, 0.0f, e -> text.color);
-
-					float log_width = log_bounds.width - e -> left_padding - e -> right_padding;
 
 					// render cursor (only if placeholder text is not being rendered and text field has focus)
 					if(strlen(e -> text.str) > 0 && e -> has_focus)
@@ -880,13 +952,13 @@ static void phos_gui_render_elem(const phos_gui_elem *const e)
 
 						float caret_x = MeasureTextEx(*e -> text.font, buf, e -> text.font_size, 0.0f).x;
 
-						float cx = log_bounds.x + caret_x - e -> text.scroll;
-						DrawRectangle(cx, e -> text.pos.y, PHOS_GUI_CURSOR_WIDTH, e -> text.font_size, e -> text.color);
+						float cx = draw_pos.x + caret_x;
+						DrawRectangle(cx, draw_pos.y, PHOS_GUI_CURSOR_WIDTH, e -> text.font_size, e -> text.color);
 					}
-
-					EndScissorMode();
 					break;
 			}
+
+			EndScissorMode();
 		}
 	}
 

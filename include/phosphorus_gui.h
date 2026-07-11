@@ -16,20 +16,6 @@
 
 
 /**
-  A click callback component. Click callbacks provide
-  elements with actions upon being clicked.
-
-  @param return_type The return type of the callback function.
-  @param name The name of the callback function field inside
-  the UI element.
-  @param ... The argument types the callback function should expect
-  when called.
-*/
-#define PHOS_GUI_CLICK_CALLBACK(return_type, name, ...) \
-	return_type (*name) (__VA_ARGS__)
-
-
-/**
   The different types of elements.
 */
 typedef enum phos_gui_elem_type
@@ -87,13 +73,34 @@ typedef enum phos_gui_elem_render_mode
 typedef enum phos_gui_alignment
 {
 	/**
-	  Indicates the targeted item should be aligned to the left.
+	  Indicates the targeted item should be aligned to the inner
+	  top of an element. The inner top represents the visual top
+	  of the element + top padding.
 	*/
-	PHOS_GUI_ALIGN_LEFT,
+	PHOS_GUI_ALIGN_INNER_TOP,
 	/**
-	  Indicates the targeted item should be aligned to the right.
+	  Indicates the targeted item should be aligned to the inner left
+	  of an element. The inner left represents the visual left
+	  of the element + left padding.
 	*/
-	PHOS_GUI_ALIGN_RIGHT,
+	PHOS_GUI_ALIGN_INNER_LEFT,
+	/**
+	  Indicates the targeted item should be aligned to the inner right
+	  of an element. The inner right represents the visual right
+	  of the element - right padding.
+	*/
+	PHOS_GUI_ALIGN_INNER_RIGHT,
+	/**
+	  Indicates the targeted item should be aligned to the inner bottom
+	  of an element. The inner bottom represents the visual bottom of
+	  the element - bottom padding.
+	*/
+	PHOS_GUI_ALIGN_INNER_BOTTOM,
+	/**
+	  Indicates the targeted item should result in the center
+	  of an element.
+	*/
+	PHOS_GUI_ALIGN_INNER_CENTER
 } phos_gui_alignment;
 
 
@@ -554,15 +561,32 @@ PHOS_GUI_API void phos_gui_gen_elem_colors(phos_gui_elem *elem, Color default_co
 
 /**
   Sets the contents of the given element's text component.
+
+  @param elem The element to modify.
+  @param target_str The specific string buffer to set on the element ('str' or 'placeholder_str').
+  @param str The string that should occupy the target string given.
 */
-PHOS_GUI_API void phos_gui_set_text_contents(phos_gui_elem *elem, const char *str);
+PHOS_GUI_API void phos_gui_set_text_contents(phos_gui_elem *elem, char *target_str, const char *str);
 
 /**
   Calculates the position of an object if it were aligned with the given element
   using the given alignment. The returned position is not a relative position, it
   is absolute.
+
+  @param elem The element to align against.
+  @param alignment The alignment to use.
+  @param object_size The size of whatever is being aligned against 'elem'. Can be another object, element, text, etc.
 */
-PHOS_GUI_API Vector2 phos_gui_align(phos_gui_elem *elem, phos_gui_alignment alignment);
+PHOS_GUI_API Vector2 phos_gui_align(phos_gui_elem *elem, phos_gui_alignment alignment, Vector2 object_size);
+/**
+  Calculates the position of the text component of an element based on an alignment.
+
+  @param elem The element to align against.
+  @param alignment The alignment to use.
+  @param target_str The string buffer on the element to use when aligning. For example, if using placeholder text,
+  pass in 'elem -> text.placeholder_str'.
+*/
+PHOS_GUI_API Vector2 phos_gui_align_text(phos_gui_elem *elem, phos_gui_alignment alignment, const char *target_str);
 
 /**
   Adds an event listener to an element.
@@ -577,6 +601,11 @@ PHOS_GUI_API Vector2 phos_gui_align(phos_gui_elem *elem, phos_gui_alignment alig
   the event listener is true.
 */
 PHOS_GUI_API void phos_gui_add_event_listener(phos_gui_elem *elem, phos_gui_event_listener_condition event, phos_gui_event_listener_action action);
+
+/**
+  Sets the padding on an element.
+*/
+PHOS_GUI_API void phos_gui_set_elem_padding(phos_gui_elem *elem, float top, float left, float bottom, float right);
 
 /**
   Registers a UI element using the element's ID.
