@@ -63,14 +63,28 @@ typedef struct phos_gui_event_listener_arr
 	size_t size, capacity;
 } phos_gui_event_listener_arr;
 
+// blueprints:
+typedef struct phos_gui_blueprint
+{
+	char ID[PHOS_GUI_MAX_ID_LEN + 1];
+	phos_gui_elem *elem;
+} phos_gui_blueprint;
+typedef struct phos_gui_blueprint_arr
+{
+	phos_gui_blueprint *data;
+	size_t size, capacity;
+} phos_gui_blueprint_arr;
+
 static bool init = false;
 static phos_gui_elem_arr elem_registry;
+static phos_gui_blueprint_arr blueprint_registry;
 static phos_gui_event_listener_arr event_listeners;
 static phos_gui_tex_arr textures;
 static phos_gui_font_arr fonts;
 
-// for elements with "<auto-gen>" ID, ensures unique auto-generated IDs
-static int phos_gui_auto_id = 0;
+// for objects with "<auto-gen>" ID, ensures unique auto-generated IDs
+static size_t elem_auto_id = 0;
+static size_t blueprint_auto_id = 0;
 
 // keyboard input
 typedef struct phos_gui_key_timer
@@ -102,6 +116,7 @@ void phos_gui_init()
 	}
 
 	dynas_init(&elem_registry);
+	dynas_init(&blueprint_registry);
 	dynas_init(&event_listeners);
 	dynas_init(&textures);
 	dynas_init(&fonts);
@@ -120,7 +135,8 @@ void phos_gui_shutdown()
 		return;
 	}
 
-	dynas_free(&elem_registry); 
+	dynas_free(&elem_registry);
+	dynas_free(&blueprint_registry);
 	dynas_free(&event_listeners);
 
 	// unload every texture loaded
@@ -222,7 +238,7 @@ Vector2 phos_gui_get_elem_center_with_text(phos_gui_elem *elem)
 	}
 	if(!elem -> text.font)
 	{
-		vl_log(VL_ERROR, "This element ('%s') has a null font, cannot obtain center with text!\n", elem -> id);
+		vl_log(VL_ERROR, "This element ('%s') has a null font, cannot obtain center with text!\n", elem -> ID);
 		return v;
 	}
 
@@ -313,12 +329,12 @@ Rectangle phos_gui_get_text_bounds(const phos_gui_elem *const elem, const char *
 	}
 	if(strlen(str) == 0)
 	{
-		vl_delay_log(VL_WARNING, 5.0f, "Cannot obtain text bounds for empty text on element: '%s'!\n", elem -> id);
+		vl_delay_log(VL_WARNING, 5.0f, "Cannot obtain text bounds for empty text on element: '%s'!\n", elem -> ID);
 		return r;
 	}
 	if(!elem -> text.font || !IsFontValid(*elem -> text.font) || elem -> text.font_size <= 0.0f)
 	{
-		vl_delay_log(VL_ERROR, 1.0f, "Cannot obtain text bounds for invalid font on element: '%s'!\n", elem -> id);
+		vl_delay_log(VL_ERROR, 1.0f, "Cannot obtain text bounds for invalid font on element: '%s'!\n", elem -> ID);
 		return r;
 	}
 
@@ -485,7 +501,7 @@ void phos_gui_set_elem_outline(phos_gui_elem *elem, Color color, float thickness
 
 	if(thickness <= 0)
 	{
-		vl_log(VL_WARNING, "Element outline disabled: '%s'.\n", elem -> id);
+		vl_log(VL_WARNING, "Element outline disabled: '%s'.\n", elem -> ID);
 	}
 
 	// determine which color field to use based on render mode
@@ -649,7 +665,14 @@ void phos_gui_set_elem_margin(phos_gui_elem *elem, float left, float top, float 
 	elem -> bottom_margin = bottom;
 }
 
-PHOS_GUI_API int phos_gui_register_elem(phos_gui_elem *elem)
+static void phos_gui_auto_gen_id(const char *ID, char *target, size_t *generator)
+{
+	if(strcmp(ID, "!<auto-gen>") == 0)
+		sprintf(target, "<auto-gen>");
+	else if(strcmp(ID, "<auto-gen>") == 0)
+		sprintf(target, "elem_#%zu", (*generator)++);
+}
+static int phos_gui_register_elem(phos_gui_elem *elem)
 {
 	if(!elem)
 	{
@@ -661,51 +684,39 @@ PHOS_GUI_API int phos_gui_register_elem(phos_gui_elem *elem)
 		vl_log(VL_ERROR, "Cannot register element, phos_gui_init() was never called!\n");
 		return 0;
 	}
-	if(strlen(elem -> id) == 0)
+	if(strlen(elem -> ID) == 0)
 	{
 		vl_log(VL_ERROR, "Cannot register element with empty ID!\n");
 		return 0;
 	}
 
-	// first check to see if the element's ID is set to "!<auto-gen>"
-	if(strcmp(elem -> id, "!<auto-gen>") == 0)
-	{
-		sprintf(elem -> id, "<auto-gen>");
-	}
-	// or auto-generate element's ID if it is set to "<auto-gen>"
-	else if(strcmp(elem -> id, "<auto-gen>") == 0)
-	{
-		sprintf(elem -> id, "elem_#%d", phos_gui_auto_id++);
-	}
+	// auto-generate if necessary
+	phos_gui_auto_gen_id(elem -> ID, elem -> ID, &elem_auto_id);
 
 	// find duplicate pointers and IDs:
 	for(size_t i = 0; i < elem_registry.size; ++i)
 	{
 		phos_gui_elem *e = elem_registry.data[i];
 
-		if(e)
+		if(e == elem)
 		{
-			if(e == elem)
-			{
-				vl_log(VL_ERROR, "Duplicate UI element pointer found: %p!\n", e);
-				return 0;
-			}
-			if(strcmp(e -> id, elem -> id) == 0)
-			{
-				vl_log(VL_ERROR, "Duplicate ID found: '%s'!\n", e -> id);
-				return 0;
-			}
+			vl_log(VL_ERROR, "Duplicate UI element pointer found while registering element: %p!\n", e);
+			return 0;
+		}
+		if(strcmp(e -> ID, elem -> ID) == 0)
+		{
+			vl_log(VL_ERROR, "Duplicate ID found: '%s'!\n", e -> ID);
+			return 0;
 		}
 	}
 
 	// no duplicate, the elem can be registered
 	dynas_add(&elem_registry, elem);
 
-	vl_log(VL_SUCCESS, "Registered element with ID: '%s'!\n", elem -> id);
+	vl_log(VL_SUCCESS, "Registered element with ID: '%s'!\n", elem -> ID);
 
 	return 1;
 }
-
 static void phos_gui_resolve_margin_collisions(phos_gui *gui)
 {
 	// iterate over all elements in the gui
@@ -787,7 +798,6 @@ static void phos_gui_resolve_margin_collisions(phos_gui *gui)
 		}
 	}
 }
-
 int phos_gui_add_elem(phos_gui *gui, phos_gui_elem *elem)
 {
 	if(!gui || !elem)
@@ -814,6 +824,9 @@ int phos_gui_add_elem(phos_gui *gui, phos_gui_elem *elem)
 	// resolve any collisions after adding element
 	phos_gui_resolve_margin_collisions(gui);
 
+	// ensure elem remembers its GUI
+	elem -> gui = gui;
+
 	return 1;
 }
 int phos_gui_add_elem_id(phos_gui *gui, phos_gui_elem *elem, const char *ID)
@@ -823,16 +836,21 @@ int phos_gui_add_elem_id(phos_gui *gui, phos_gui_elem *elem, const char *ID)
 		vl_log(VL_ERROR, "Failed to add UI element. Make sure 'gui', 'elem' and 'ID' are not NULL!\n");
 		return 0;
 	}
+	if(strlen(ID) == 0)
+	{
+		vl_log(VL_ERROR, "Element ID cannot be empty!\n");
+		return 0;
+	}
 
 	// copy ID into element's ID
-	strcpy(elem -> id, ID);
+	strcpy(elem -> ID, ID);
 
 	// add normally
 	return phos_gui_add_elem(gui, elem);
 }
 phos_gui_elem *phos_gui_get_elem(const char *ID)
 {
-	if(!ID)
+	if(!ID || strlen(ID) == 0)
 	{
 		vl_log(VL_ERROR, "Cannot obtain UI element with null ID!\n");
 		return NULL;
@@ -848,12 +866,91 @@ phos_gui_elem *phos_gui_get_elem(const char *ID)
 		phos_gui_elem *e = elem_registry.data[i];
 
 		if(e)
-			if(strcmp(e -> id, ID) == 0)
+			if(strcmp(e -> ID, ID) == 0)
 				return e;
 	}
 
 	vl_log(VL_ERROR, "No UI element found with the ID: '%s'\n", ID);
 	return NULL;
+}
+void phos_gui_clone_elem(phos_gui_elem *elem, const char *ID)
+{
+	if(!elem)
+	{
+		vl_log(VL_ERROR, "Cannot clone null UI element!\n");
+		return;
+	}
+	if(!ID || strlen(ID) == 0)
+	{
+		vl_log(VL_ERROR, "Invalid blueprint ID!\n");
+		return;
+	}
+
+	phos_gui_blueprint blueprint = {0};
+
+	// auto-generate ID if necessary
+	phos_gui_auto_gen_id(ID, blueprint.ID, &blueprint_auto_id);
+
+	// see if a duplicate blueprint exists
+	for(size_t i = 0; i < blueprint_registry.size; ++i)
+	{
+		phos_gui_blueprint *bp = &blueprint_registry.data[i];
+
+		if(bp -> elem == elem)
+		{
+			vl_log(VL_ERROR, "Duplicate UI element pointer found while creating blueprint: %p!\n", elem);
+			return;
+		}
+		if(strcmp(bp -> ID, ID) == 0)
+		{
+			vl_log(VL_ERROR, "Duplicate blueprint ID found: '%s'!\n", bp -> ID);
+			return;
+		}
+	}
+
+	strcpy(blueprint.ID, ID);
+	blueprint.elem = elem;
+
+	// no duplicate, blueprint can be created and saved
+	dynas_add(&blueprint_registry, blueprint);
+
+	vl_log(VL_SUCCESS, "Registered blueprint with ID: '%s'!\n", ID);
+}
+void phos_gui_init_clone(phos_gui_elem *target_elem, const char *ID)
+{
+	if(!ID || strlen(ID) == 0)
+	{
+		vl_log(VL_ERROR, "Cannot create new instance of a blueprint with invalid ID!\n");
+		return;
+	}
+
+	// obtain blueprint
+	phos_gui_blueprint *bp = NULL;
+	for(size_t i = 0; i < blueprint_registry.size; ++i)
+	{
+		phos_gui_blueprint *saved_bp = &blueprint_registry.data[i];
+
+		// find matching blueprint
+		if(strcmp(saved_bp -> ID, ID) == 0)
+		{
+			bp = saved_bp;
+			break;
+		}
+	}
+
+	// if no matching blueprint:
+	if(!bp)
+	{
+		vl_log(VL_ERROR, "No blueprint found with the ID: '%s'!\n", ID);
+		return;
+	}
+
+	// start creating new instance
+	*target_elem = *bp -> elem;
+	strcpy(target_elem -> ID, "<auto-gen>");
+
+	// add and register the elem
+	phos_gui_add_elem(bp -> elem -> gui, target_elem);
 }
 
 static void phos_gui_move_cursor_left(phos_gui_elem *e)
@@ -1082,7 +1179,7 @@ static void phos_gui_render_elem(const phos_gui_elem *const e)
 	{
 		// warn if the render mode is not PHOS_GUI_TEXTURE
 		if(e -> render_mode != PHOS_GUI_TEXTURE)
-			vl_delay_log(VL_WARNING, 3.0f, "This element ('%s') does not have the PHOS_GUI_TEXTURE render mode, skipping rendering texture.\n", e -> id);
+			vl_delay_log(VL_WARNING, 3.0f, "This element ('%s') does not have the PHOS_GUI_TEXTURE render mode, skipping rendering texture.\n", e -> ID);
 		else
 		{
 			Rectangle src = { 0, 0, e -> bg_texture -> width, e -> bg_texture -> height };
@@ -1107,7 +1204,7 @@ static void phos_gui_render_elem(const phos_gui_elem *const e)
 	if(e -> text.font && IsFontValid(*e -> text.font))
 	{
 		if(e -> text.font_size <= 0.0f || ColorIsEqual(e -> text.color, BLANK))
-			vl_delay_log(VL_WARNING, 1.0f, "This element's ('%s') text component will not render correctly due to invalid font size, or the color's alpha is 0!\n", e -> id);
+			vl_delay_log(VL_WARNING, 1.0f, "This element's ('%s') text component will not render correctly due to invalid font size, or the color's alpha is 0!\n", e -> ID);
 		else
 		{
 			/* begin scissor mode to cut off text that has been scrolled off (USE PADDED REGION, NOT VISUAL)

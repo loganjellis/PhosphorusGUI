@@ -28,24 +28,12 @@ int main(void)
 	elem1.text.pos = phos_gui_align_text(&elem1, PHOS_GUI_ALIGN_INNER_LEFT, elem1.text.placeholder_str);
 	phos_gui_center_elem(&elem1, PHOS_GUI_WIN_ORIGIN, PHOS_GUI_WIN_SIZE);
 
-	
+	// try blueprint system now:
+	phos_gui_clone_elem(&elem1, "simple_text_field");
+
 	phos_gui_elem elem2 = {0};
-	phos_gui_add_elem_id(&gui, &elem2, "<auto-gen>");
-
-	elem2.type = PHOS_GUI_BUTTON;
-	elem2.shape = PHOS_GUI_RECT;
-	elem2.outline_color = BLACK;
-	elem2.outline_thickness = 3.0f;
-	phos_gui_set_elem_bounds(&elem2, 100.0f, 500.0f, 200.0f, 100.0f);
-	phos_gui_gen_elem_colors(&elem2, WHITE, -0.2f, -0.35f);
-	elem2.text.font = elem1.text.font;
-	phos_gui_init_text(&elem2, "Click Me!", PHOS_GUI_DEFAULT_FONT_SIZE, BLACK);
-	elem2.text.pos = phos_gui_align_text(&elem2, PHOS_GUI_ALIGN_INNER_CENTER, elem2.text.str);
-	phos_gui_set_elem_padding(&elem2, 5.0f, 5.0f, 5.0f, 5.0f);
-	phos_gui_set_elem_margin(&elem2, 0.0f, 50.0f, 0.0f, 50.0f);
-	phos_gui_center_elem(&elem2, PHOS_GUI_WIN_ORIGIN, PHOS_GUI_WIN_SIZE);
-
-	phos_gui_move_elem(&elem2, 0, 100);
+	phos_gui_init_clone(&elem2, "simple_text_field");
+	phos_gui_move_elem(&elem2, 0.0f, 125.0f);
 
 	phos_gui_set_gui(&gui);
 

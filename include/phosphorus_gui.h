@@ -286,6 +286,8 @@ typedef struct phos_gui_text_component
 	bool accept_specials;
 } phos_gui_text_component;
 
+struct phos_gui; // forward declare phos_gui
+
 /**
   A phos_gui_elem represents a single UI element
   within a phos_gui.
@@ -311,7 +313,12 @@ typedef struct phos_gui_elem
 	  and PhosphorusGUI will properly name the
 	  element '<auto-gen>.'
 	*/
-	char id[PHOS_GUI_MAX_ID_LEN + 1];
+	char ID[PHOS_GUI_MAX_ID_LEN + 1];
+
+	/**
+	  The phos_gui instance this element belongs to.
+	*/
+	struct phos_gui *gui;
 
 	/**
 	  This UI element's background texture.
@@ -488,7 +495,10 @@ typedef bool (*phos_gui_event_listener_condition) (phos_gui_elem*);
 typedef void (*phos_gui_event_listener_action) (phos_gui_elem*);
 
 /**
-  A phos_gui stores up to 64 UI elements.
+  A phos_gui is used to store and organize UI elements.
+
+  It represents the scene, or the context, in which the
+  elements live in.
 */
 typedef struct phos_gui
 {
@@ -726,15 +736,6 @@ PHOS_GUI_API void phos_gui_set_elem_padding(phos_gui_elem *elem, float left, flo
 PHOS_GUI_API void phos_gui_set_elem_margin(phos_gui_elem *elem, float left, float top, float right, float bottom);
 
 /**
-  Registers a UI element using the element's ID.
-
-  This function does check for duplicate IDs, as well
-  as duplicate pointers.
-
-  @return 1 on success, 0 on failure.
-*/
-PHOS_GUI_API int phos_gui_register_elem(phos_gui_elem *elem);
-/**
   Adds a UI element to the given phos_gui instance.
 
   This automatically registers the element, and performs
@@ -759,6 +760,34 @@ PHOS_GUI_API int phos_gui_add_elem_id(phos_gui *gui, phos_gui_elem *elem, const 
   Obtains a UI element with a specific ID.
 */
 PHOS_GUI_API phos_gui_elem *phos_gui_get_elem(const char *ID);
+/**
+  Creates a clone of a UI element for reuse.
+
+  When creating a clone of a UI element, you are creating
+  a blueprint that can be instantiated at any point, instantly
+  cloning the element. Because of this blueprints must have unique
+  IDs, just like elements. Additionally, to reduce any copies, every
+  blueprint also must have a unique element pointer.
+
+  @param elem The element to clone. Note that no two blueprints can be created
+  using this element pointer.
+  @param ID The ID to give to the blueprint. Later, to instantiate the blueprint,
+  you use phos_gui_new_instance(ID).
+*/
+PHOS_GUI_API void phos_gui_clone_elem(phos_gui_elem *elem, const char *ID);
+/**
+  Creates a new instance of a cloned element,
+  and inserts the data into 'target_elem.'
+
+  @note The target element will have an auto-generated ID.
+  Additionally, this function is going to automatically add the target
+  element to the same phos_gui the original element belongs to.
+  You can undo it by using phos_gui_remove_elem(...).
+
+  @see phos_gui_clone_elem(phos_gui_elem*, const char*)
+  @see phos_gui_remove_elem(phos_gui*, phos_gui_elem*)
+*/
+PHOS_GUI_API void phos_gui_init_clone(phos_gui_elem *target_elem, const char *ID);
 
 /**
   Updates the current phos_gui's elements.
