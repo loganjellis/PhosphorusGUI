@@ -19,12 +19,10 @@ int main(void)
 	elem1.type = PHOS_GUI_TEXT_FIELD;
 	elem1.shape = PHOS_GUI_RECT;
 	elem1.render_mode = PHOS_GUI_OUTLINE;
-	elem1.color = WHITE;
-	elem1.focus_outline_color = (Color) { 50, 50, 50, 255 };
-	elem1.outline_color = (Color) { 150, 150, 150, 255 };
-	elem1.outline_thickness = 10.0f;
 	phos_gui_set_elem_bounds(&elem1, 200.0f, 300.0f, 400.0f, 150.0f);
-	phos_gui_gen_elem_colors(&elem1, WHITE, -0.2f, -0.35f);
+	phos_gui_fill_color_set(&elem1.primary_colors, WHITE);
+	phos_gui_init_color_set(&elem1.outline_colors, LIGHTGRAY, LIGHTGRAY, BLACK, DARKGRAY); // norm, hover, press, focus
+	elem1.outline_thickness = 10.0f;
 	elem1.texture = phos_gui_load_texture("../test_btn.png");
 	elem1.text.font = phos_gui_load_font("../test_font.ttf");
 	phos_gui_init_text(&elem1, "", PHOS_GUI_DEFAULT_FONT_SIZE, BLACK);

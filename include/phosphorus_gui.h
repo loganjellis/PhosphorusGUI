@@ -290,6 +290,39 @@ typedef struct phos_gui_text_component
 struct phos_gui; // forward declare phos_gui
 
 /**
+  A phos_gui_color_set represents a collection
+  of colors a UI element uses.
+*/
+typedef struct phos_gui_color_set
+{
+	/**
+	  The normal color.
+
+	  This color is used when rendering the element in its default state.
+	*/
+	Color normal_color;
+	/**
+	  The hover color.
+
+	  This color is used when the mouse is hovering over the element.
+	*/
+	Color hover_color;
+	/**
+	  The press color.
+
+	  This color is used when the mouse is held down while hovered over
+	  the element.
+	*/
+	Color press_color;
+	/**
+	  The focus color.
+
+	  This color is used when the element currently has focus.
+	*/
+	Color focus_color;
+} phos_gui_color_set;
+
+/**
   A phos_gui_elem represents a single UI element
   within a phos_gui.
 */
@@ -315,6 +348,15 @@ typedef struct phos_gui_elem
 	  element '<auto-gen>.'
 	*/
 	char ID[PHOS_GUI_MAX_ID_LEN + 1];
+
+	/**
+	  The element's primary color set.
+	*/
+	phos_gui_color_set primary_colors;
+	/**
+	  The element's outline color set.
+	*/
+	phos_gui_color_set outline_colors;
 
 	/**
 	  The phos_gui instance this element belongs to.
@@ -363,45 +405,6 @@ typedef struct phos_gui_elem
 	  also still taking mouse hover and press effects into account).
 	*/
 	phos_gui_elem_render_mode render_mode;
-
-	/**
-	  The element's color.
-
-	  This represents the element's
-	  default color.
-	*/
-	Color color;
-	/**
-	  The element's hover color.
-
-	  This color is used when the mouse
-	  is hovered over this element.
-	*/
-	Color hover_color;
-	/**
-	  The element's press color.
-
-	  This color is used when the mouse
-	  is held down over this element.
-	*/
-	Color press_color;
-	/**
-	  The element's outline color.
-
-	  @note If set to { 0, 0, 0, 0 }, it will
-	  not be visible.
-
-	  @important If the render mode of the element is set to PHOS_GUI_OUTLINE,
-	  do not set this value, as PhosphorusGUI will use the 'color' field of
-	  the element instead.
-	*/
-	Color outline_color;
-	/**
-	  The element's outline color, but when it is focused.
-
-	  @see outline_color
-	*/
-	Color focus_outline_color;
 
 	/**
 	  The element's rotation in degrees.
@@ -495,23 +498,6 @@ typedef struct phos_gui_elem
 	*/
 	bool pressed;
 } phos_gui_elem;
-
-/**
-  An alias for a function pointer used by PhosphorusGUI
-  in event listeners.
-
-  The function should return a boolean, and it takes in
-  the target element of the event listener.
-*/
-typedef bool (*phos_gui_event_listener_condition) (phos_gui_elem*);
-/**
-  An alias for a function pointer used by PhosphorusGUI
-  in event listeners.
-
-  The function should return nothing, and it takes in
-  the target element of the event listener.
-*/
-typedef void (*phos_gui_event_listener_action) (phos_gui_elem*);
 
 /**
   A phos_gui is used to store and organize UI elements.
@@ -710,30 +696,26 @@ PHOS_GUI_API void phos_gui_init_placeholder_text(phos_gui_elem *elem, const char
 PHOS_GUI_API void phos_gui_set_elem_bounds(phos_gui_elem *elem, float x, float y, float w, float h);
 
 /**
-  Quickly sets up the outline of an element (the color and line thickness).
-
-  @note Elements have two outline colors, the default outline color, and then
-  an outline color for when the element has focus.
+  Quickly sets up the specified color set.
 */
-PHOS_GUI_API void phos_gui_set_elem_outline(phos_gui_elem *elem, Color default_color, Color focus_color, float thickness);
-
+PHOS_GUI_API void phos_gui_init_color_set(phos_gui_color_set *set, Color normal_color, Color hover_color, Color press_color, Color focus_color);
 /**
-  Quickly sets up an element's colors.
+  Sets each color in a color set to the one color given here.
 */
-PHOS_GUI_API void phos_gui_set_elem_colors(phos_gui_elem *elem, Color color, Color hover_color, Color press_color);
+PHOS_GUI_API void phos_gui_fill_color_set(phos_gui_color_set *set, Color color);
 /**
-  Quickly generates an element's colors.
+  Quickly generates an color set.
 
   This function uses the ColorBrightness(...) function
   to quickly generate the hover and press color of
-  an element based on the default color given here.
+  a color set based on the default color given here.
   All you have to provide is the brightness
   factors for each respective color.
 
-  @note This function will set the 'color' field of the element
-  to the default color given.
+  @note This function sets the 'normal_color' field in the
+  given color set to the 'normal_color' given.
 */
-PHOS_GUI_API void phos_gui_gen_elem_colors(phos_gui_elem *elem, Color default_color, float hover_color_factor, float press_color_factor);
+PHOS_GUI_API void phos_gui_gen_color_set(phos_gui_color_set *set, Color normal_color, float hover_color_factor, float press_color_factor, float focus_color_factor);
 
 /**
   Sets the contents of the given element's text component.
@@ -763,23 +745,6 @@ PHOS_GUI_API Vector2 phos_gui_align(phos_gui_elem *elem, phos_gui_alignment alig
   pass in 'elem -> text.placeholder_str'.
 */
 PHOS_GUI_API Vector2 phos_gui_align_text(phos_gui_elem *elem, phos_gui_alignment alignment, const char *target_str);
-
-/**
-  Adds an event listener to an element.
-
-  PhosphorusGUI automatically manages all event
-  listeners added through this function.
-
-  @note For an event listener on an element to execute,
-  the given element must have focus.
-
-  @param elem The element to add a listener to.
-  @param event The condition of the event. This is a function
-  that is executed to determine if the action should execute.
-  @param action The action to execute when the condition of
-  the event listener is true.
-*/
-PHOS_GUI_API void phos_gui_add_event_listener(phos_gui_elem *elem, phos_gui_event_listener_condition event, phos_gui_event_listener_action action);
 
 /**
   Sets the padding on an element.

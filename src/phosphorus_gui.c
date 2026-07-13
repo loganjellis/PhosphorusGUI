@@ -48,21 +48,6 @@ typedef struct phos_gui_font_arr
 	size_t size, capacity;
 } phos_gui_font_arr;
 
-// event listener
-typedef struct phos_gui_event_listener
-{
-	phos_gui_elem *target;
-	phos_gui_event_listener_condition event;
-	phos_gui_event_listener_action action;
-} phos_gui_event_listener;
-
-// array of event listeners
-typedef struct phos_gui_event_listener_arr
-{
-	phos_gui_event_listener *data;
-	size_t size, capacity;
-} phos_gui_event_listener_arr;
-
 // blueprints:
 typedef struct phos_gui_blueprint
 {
@@ -86,7 +71,6 @@ static bool init = false;
 static phos_gui_elem_arr elem_registry;
 static phos_gui_blueprint_arr blueprint_registry;
 static phos_gui_arr gui_registry;
-static phos_gui_event_listener_arr event_listeners;
 static phos_gui_tex_arr textures;
 static phos_gui_font_arr fonts;
 
@@ -133,7 +117,6 @@ void phos_gui_init()
 	dynas_init(&elem_registry);
 	dynas_init(&blueprint_registry);
 	dynas_init(&gui_registry);
-	dynas_init(&event_listeners);
 	dynas_init(&textures);
 	dynas_init(&fonts);
 
@@ -154,7 +137,6 @@ void phos_gui_shutdown()
 	dynas_free(&elem_registry);
 	dynas_free(&blueprint_registry);
 	dynas_free(&gui_registry);
-	dynas_free(&event_listeners);
 
 	// unload every texture loaded
 	for(size_t i = 0; i < textures.size; ++i)
@@ -578,53 +560,37 @@ void phos_gui_set_elem_bounds(phos_gui_elem *elem, float x, float y, float w, fl
 	elem -> text.pos = Vector2Add(elem -> text.pos, diff);
 }
 
-void phos_gui_set_elem_outline(phos_gui_elem *elem, Color default_color, Color focus_color, float thickness)
+void phos_gui_init_color_set(phos_gui_color_set *set, Color normal_color, Color hover_color, Color press_color, Color focus_color)
 {
-	if(!elem)
+	if(!set)
 	{
-		vl_log(VL_ERROR, "Cannot set outline of null UI element!\n");
+		vl_log(VL_ERROR, "Cannot set colors of null color set!\n");
 		return;
 	}
 
-	if(thickness <= 0)
-	{
-		vl_log(VL_WARNING, "Element outline disabled: '%s'.\n", elem -> ID);
-	}
-
-	// if the element's outline will be rendered only, set its primary color to the default outline color given
-	/*if(elem -> render_mode == PHOS_GUI_OUTLINE)
-		elem -> color = default_color;
-	else
-		// else, use the normal 'outline_color' field
-		elem -> outline_color = default_color;*/
-	elem -> outline_color = default_color;
-	elem -> focus_outline_color = focus_color;
-	elem -> outline_thickness = thickness;
+	*set = (phos_gui_color_set) {
+		.normal_color = normal_color,
+		.hover_color = hover_color,
+		.press_color = press_color,
+		.focus_color = focus_color };
 }
-
-void phos_gui_set_elem_colors(phos_gui_elem *elem, Color color, Color hover_color, Color press_color)
+PHOS_GUI_API void phos_gui_fill_color_set(phos_gui_color_set *set, Color color)
 {
-	if(!elem)
-	{
-		vl_log(VL_ERROR, "Cannot set colors of null UI element!\n");
-		return;
-	}
-
-	elem -> color = color;
-	elem -> hover_color = hover_color;
-	elem -> press_color = press_color;
+	phos_gui_init_color_set(set, color, color, color, color);
 }
-void phos_gui_gen_elem_colors(phos_gui_elem *elem, Color default_color, float hover_color_factor, float press_color_factor)
+void phos_gui_gen_color_set(phos_gui_color_set *set, Color normal_color, float hover_color_factor, float press_color_factor, float focus_color_factor)
 {
-	if(!elem)
+	if(!set)
 	{
-		vl_log(VL_ERROR, "Cannot generate colors of null UI element!\n");
+		vl_log(VL_ERROR, "Cannot generate colors of null color set!\n");
 		return;
 	}
 	
-	elem -> color = default_color;
-	elem -> hover_color = ColorBrightness(elem -> color, hover_color_factor);
-	elem -> press_color = ColorBrightness(elem -> color, press_color_factor);
+	*set = (phos_gui_color_set) {
+		.normal_color = normal_color,
+		.hover_color = ColorBrightness(normal_color, hover_color_factor),
+		.press_color = ColorBrightness(normal_color, press_color_factor),
+		.focus_color = ColorBrightness(normal_color, focus_color_factor) };
 }
 
 void phos_gui_set_text_contents(phos_gui_elem *elem, char *target_str, const char *str)
@@ -704,28 +670,6 @@ Vector2 phos_gui_align_text(phos_gui_elem *elem, phos_gui_alignment alignment, c
 	Rectangle elem_text_size = phos_gui_get_text_bounds(elem, target_str);
 	v = phos_gui_align(elem, alignment, (Vector2) { elem_text_size.width, elem_text_size.height });
 	return v;
-}
-
-void phos_gui_add_event_listener(phos_gui_elem *elem, phos_gui_event_listener_condition event, phos_gui_event_listener_action action)
-{
-	if(!elem)
-	{
-		vl_log(VL_ERROR, "Cannot add event listener to null UI element!\n");
-		return;
-	}
-	if(!event)
-	{
-		vl_log(VL_ERROR, "Cannot listen for null event!\n");
-		return;
-	}
-	if(!action)
-	{
-		vl_log(VL_ERROR, "Cannot execute null phos_gui_event_listener_action!\n");
-		return;
-	}
-
-	phos_gui_event_listener el = { .target = elem, .event = event, .action = action };
-	dynas_add(&event_listeners, el);
 }
 
 void phos_gui_set_elem_padding(phos_gui_elem *elem, float left, float top, float right, float bottom)
@@ -1112,8 +1056,6 @@ static void phos_gui_goto_next_elem()
 
 	// mark that elem as focused
 	curr_gui -> elems[curr_gui_elem_num] -> has_focus = true;
-
-	vl_log(VL_DEBUG, "curr focus elem: %p\n", curr_gui -> elems[curr_gui_elem_num]);
 }
 static void phos_gui_goto_prev_elem()
 {
@@ -1178,16 +1120,16 @@ static void phos_gui_update_elem(phos_gui_elem *e, float dt)
 	{
 		e -> hovered = true;
 
-		if(mouse_clicked)
-		{
-			e -> clicked = true;
-			e -> pressed = true;
-			e -> has_focus = true;
-		}
-		else if(mouse_down)
+		if(mouse_down)
 		{
 			e -> pressed = true;
 			e -> clicked = false;
+			e -> has_focus = true;
+		}
+		else if(mouse_clicked)
+		{
+			e -> clicked = true;
+			e -> pressed = true;
 			e -> has_focus = true;
 		}
 		else
@@ -1196,7 +1138,7 @@ static void phos_gui_update_elem(phos_gui_elem *e, float dt)
 			e -> pressed = false;
 		}
 	}
-	else if(mouse_clicked)
+	else if(mouse_clicked || mouse_down)
 	{
 		e -> has_focus = false;
 		e -> hovered = false;
@@ -1316,15 +1258,6 @@ void phos_gui_update(float dt)
 		if(curr_gui -> elems[i] -> gained_focus)
 			curr_gui_elem_num = i;
 	}
-
-	// update event listeners
-	for(size_t i = 0; i < event_listeners.size; ++i)
-	{
-		// eval condition function and check to see if the target elem has focus
-		bool exec = event_listeners.data[i].event(event_listeners.data[i].target) && event_listeners.data[i].target -> has_focus;
-		if(exec)
-			event_listeners.data[i].action(event_listeners.data[i].target);
-	}
 }
 
 static void phos_gui_render_ellipse_outline(Vector2 pos, float rx, float ry, float line_thickness, Color color)
@@ -1333,15 +1266,29 @@ static void phos_gui_render_ellipse_outline(Vector2 pos, float rx, float ry, flo
 		DrawEllipseLines(pos.x + rx, pos.y + ry, rx - i * 0.7f, ry - i * 0.7f, color);
 }
 
+static Color phos_gui_resolve_elem_color(const phos_gui_elem *const e, const phos_gui_color_set *const colors)
+{
+	// get the normal color of elem
+	Color color = colors -> normal_color;
+
+	// check for focus (hovered + pressed/clicked)
+	if(e -> has_focus)
+		color = colors -> focus_color;
+	// then check if just hovered
+	else if(e -> hovered)
+		color = colors -> hover_color;
+
+	// re-check for left mouse button down + hovered, and if so, use press color
+	if(IsMouseButtonDown(MOUSE_BUTTON_LEFT) && e -> hovered)
+		color = colors -> press_color;
+
+	return color;
+}
+
 static void phos_gui_render_elem(const phos_gui_elem *const e)
 {
 	// get color of elem
-	Color e_color = e -> color;
-	
-	if(e -> pressed)
-		e_color = e -> press_color;
-	else if(e -> hovered)
-		e_color = e -> hover_color;
+	Color primary_color = phos_gui_resolve_elem_color(e, &e -> primary_colors);
 
 	// create elem rects:
 	Rectangle vis_bounds = phos_gui_get_visible_elem_rect(e);
@@ -1355,7 +1302,7 @@ static void phos_gui_render_elem(const phos_gui_elem *const e)
 	if(e -> texture && IsTextureValid(*e -> texture))
 	{
 		Rectangle src = { 0, 0, e -> texture -> width, e -> texture -> height };
-		DrawTexturePro(*e -> texture, src, vis_bounds, PHOS_GUI_WIN_ORIGIN, e -> rotation, e_color);
+		DrawTexturePro(*e -> texture, src, vis_bounds, PHOS_GUI_WIN_ORIGIN, e -> rotation, primary_color);
 	}
 	// else just draw base shape (if set)
 	else if(e -> render_mode == PHOS_GUI_FILL_OUTLINE || e -> render_mode == PHOS_GUI_FILL)
@@ -1363,10 +1310,10 @@ static void phos_gui_render_elem(const phos_gui_elem *const e)
 		switch(e -> shape)
 		{
 			case PHOS_GUI_RECT:
-				DrawRectanglePro(vis_bounds, PHOS_GUI_WIN_ORIGIN, e -> rotation, e_color);
+				DrawRectanglePro(vis_bounds, PHOS_GUI_WIN_ORIGIN, e -> rotation, primary_color);
 				break;
 			case PHOS_GUI_ELLIPSE:
-				DrawEllipse(vis_bounds.x + e_rx, vis_bounds.y + e_ry, e_rx, e_ry, e_color);
+				DrawEllipse(vis_bounds.x + e_rx, vis_bounds.y + e_ry, e_rx, e_ry, primary_color);
 				break;
 		}
 	}
@@ -1420,14 +1367,7 @@ static void phos_gui_render_elem(const phos_gui_elem *const e)
 	if(e -> render_mode == PHOS_GUI_FILL_OUTLINE || e -> render_mode == PHOS_GUI_OUTLINE)
 	{
 		// get outline color
-		Color outline_color = e -> outline_color;
-
-		if(e -> has_focus)
-			outline_color = e -> focus_outline_color;
-
-		// if the elem is just being outlined, switch its outline color for 'e_color' so mouse state affects the elem visually
-		/*if(e -> render_mode == PHOS_GUI_OUTLINE)
-			outline_color = e_color;*/
+		Color outline_color = phos_gui_resolve_elem_color(e, &e -> outline_colors);
 
 		switch(e -> shape)
 		{
