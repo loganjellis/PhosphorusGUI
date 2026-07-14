@@ -793,6 +793,15 @@ static int phos_gui_register_elem(phos_gui_elem *elem)
 }
 static void phos_gui_resolve_margin_collisions(phos_gui *gui)
 {
+	/* if no elements to resolve, skip.
+
+	   the reason is because the first for loop declares 'gui -> num_elems - 1', but
+	   'num_elems' is a size_t, so if it is equal to 0, subtracting 1 loops it back to SIZE_MAX
+	   instead, causing undefined behavior.
+	*/
+	if(gui -> num_elems == 0)
+		return;
+
 	// iterate over all elements in the gui
 	for(size_t i = 0; i < gui -> num_elems - 1; ++i)
 	{
@@ -921,6 +930,25 @@ int phos_gui_add_elem_id(phos_gui *gui, phos_gui_elem *elem, const char *ID)
 
 	// add normally
 	return phos_gui_add_elem(gui, elem);
+}
+int phos_gui_add_elem_to_container(phos_gui_elem *container, phos_gui_elem *elem)
+{
+	if(!container || !elem)
+	{
+		vl_log(VL_ERROR, "Failed to add element to container! Make sure 'container' and 'elem' are not NULL!\n");
+		return 0;
+	}
+
+	// add elem to container
+	if(container -> num_children >= PHOS_GUI_MAX_CHILDREN)
+	{
+		vl_log(VL_ERROR, "This container cannot contain any more child elements: '%s'!\n", container -> ID);
+		return 0;
+	}
+	container -> children[container -> num_children++] = elem;
+
+	// add elem to same phos_gui
+	return phos_gui_add_elem(container -> gui, elem);
 }
 phos_gui_elem *phos_gui_get_elem(const char *ID)
 {
@@ -1287,7 +1315,6 @@ static void phos_gui_update_elem(phos_gui_elem *e, float dt)
 	}
 }
 
-// TODO create phos_gui_update function for specific window scaling so GetMousePosition() always works!!
 void phos_gui_update(float dt)
 {
 	if(!curr_gui)
@@ -1297,7 +1324,7 @@ void phos_gui_update(float dt)
 	}
 
 	// if any margin collisions, resolve them immediately
-	// TODO un-comment: phos_gui_resolve_margin_collisions(curr_gui);
+	phos_gui_resolve_margin_collisions(curr_gui);
 
 	// 'tab' and 'shift+tab' to travel between elems
 	phos_gui_travel_elems();
@@ -1317,6 +1344,10 @@ void phos_gui_update(float dt)
 		if(curr_gui -> elems[i] -> gained_focus)
 			curr_gui_elem_num = i;
 	}
+
+	// if no elems to update, warn user
+	if(curr_gui -> num_elems == 0)
+		vl_delay_log(VL_WARNING, 10.0f, "The current phos_gui ('%s') has no elements! Skipping updating and rendering!\n", curr_gui -> ID);
 }
 
 static void phos_gui_render_ellipse_outline(Vector2 pos, float rx, float ry, float line_thickness, Color color)
@@ -1420,7 +1451,7 @@ static void phos_gui_render_elem(const phos_gui_elem *const e)
 					}
 					break;
 				default:
-					// for INVALID_ELEM_TYPE or CONTAINER, just skip text component
+					// for INVALID_ELEM_TYPE or other types, just skip text component
 					break;
 			}
 

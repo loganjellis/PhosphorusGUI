@@ -11,40 +11,7 @@ int main(void)
 
 	// TODO 'scale' field in the gui struct?
 	phos_gui gui = {0};
-	strcpy(gui.ID, "<auto-gen>");
-
-	phos_gui_elem elem1 = {0};
-	phos_gui_add_elem_id(&gui, &elem1, "<auto-gen>");
-
-	elem1.type = PHOS_GUI_TEXT_FIELD;
-	elem1.shape = PHOS_GUI_RECT;
-	elem1.render_mode = PHOS_GUI_FILL_OUTLINE;
-	phos_gui_set_elem_bounds(&elem1, 200.0f, 300.0f, 400.0f, 150.0f);
-	phos_gui_fill_color_set(&elem1.primary_colors, WHITE);
-	elem1.primary_colors.hover_color = LIGHTGRAY;
-	phos_gui_init_color_set(&elem1.outline_colors, LIGHTGRAY, LIGHTGRAY, BLACK, DARKGRAY); // norm, hover, press, focus
-	elem1.outline_thickness = 10.0f;
-	elem1.text.font = phos_gui_load_font("../test_font.ttf");
-	phos_gui_init_text(&elem1, "", PHOS_GUI_FONT_SIZE_DEFAULT, BLACK);
-	phos_gui_init_placeholder_text(&elem1, "Enter name:", GRAY);
-	Rectangle text_bounds = phos_gui_get_text_bounds(&elem1, elem1.text.placeholder_str);
-	phos_gui_set_elem_padding(&elem1, 30, 30, 30, 30);
-	elem1.top_margin = 10.0f;
-	elem1.text.pos = phos_gui_get_proposed_text_align_pos(&elem1, PHOS_GUI_ALIGN_INNER_LEFT, elem1.text.placeholder_str);
-	phos_gui_center_elem(&elem1, PHOS_GUI_WIN_ORIGIN, PHOS_GUI_WIN_SIZE);
-
-	// try blueprint system now:
-	phos_gui_clone_elem(&elem1, "simple_text_field");
-
-	phos_gui_elem elem2 = {0};
-	phos_gui_init_clone(&elem2, "simple_text_field");
-	elem2.size = (Vector2) { 250.0f, 125.0f };
-	strcpy(elem2.text.placeholder_str, "THIS IS ELEM 2!");
-
-	// move elem 2 centered above elem 1
-	phos_gui_align_elem(&elem2, PHOS_GUI_ALIGN_ABOVE, &elem1);
-	phos_gui_init_color_set(&elem2.outline_colors, BLUE, BLUE, DARKBLUE, VIOLET);
-
+	phos_gui_set_id(&gui, "<auto-gen>");
 	phos_gui_set_gui(&gui);
 
 	while(!WindowShouldClose())

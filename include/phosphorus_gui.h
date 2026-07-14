@@ -14,6 +14,18 @@
 #include <string.h>
 #include "raylib.h"
 
+/**
+  Sets the ID field of the given object.
+
+  @note This macro expects a pointer to the object.
+  The object must have a valid char array field called
+  'ID.'
+*/
+#define phos_gui_set_id(object, id) \
+	do { \
+		strcpy((object) -> ID, id); \
+	} while(0)
+
 
 /**
   The different types of elements.
@@ -167,6 +179,12 @@ typedef enum phos_gui_layout_type
   phos_gui instance.
 */
 #define PHOS_GUI_MAX_ELEMS 64
+
+/**
+  The max number of child elements a parent element
+  can contain.
+*/
+#define PHOS_GUI_MAX_CHILDREN 48
 
 /**
   The max length of an element's ID.
@@ -363,6 +381,11 @@ typedef struct phos_gui_color_set
 typedef struct phos_gui_elem
 {
 	/**
+	  This element's children.
+	*/
+	struct phos_gui_elem *children[PHOS_GUI_MAX_CHILDREN];
+
+	/**
 	  This element's text component.
 	*/
 	phos_gui_text_component text;
@@ -398,6 +421,13 @@ typedef struct phos_gui_elem
 	struct phos_gui *gui;
 
 	/**
+	  This element's parent.
+
+	  If the element has no parent, this is equal to NULL.
+	*/
+	struct phos_gui_elem *parent;
+
+	/**
 	  This UI element's background texture.
 
 	  @note When an element has a valid, non-null
@@ -421,6 +451,11 @@ typedef struct phos_gui_elem
 	  The element's size.
 	*/
 	Vector2 size;
+
+	/**
+	  This element's number of children.
+	*/
+	size_t num_children;
 
 	/**
 	  The type of this element.
@@ -835,6 +870,17 @@ PHOS_GUI_API int phos_gui_add_elem(phos_gui *gui, phos_gui_elem *elem);
   @return 1 on success, 0 on failure.
 */
 PHOS_GUI_API int phos_gui_add_elem_id(phos_gui *gui, phos_gui_elem *elem, const char *ID);
+/**
+  Adds a UI element to a container element.
+
+  @note This function expects the container to already
+  be added to a phos_gui instance. The function automatically
+  adds 'elem' to the container as well as the phos_gui the container
+  is already in.
+
+  @return 1 on success, 0 on failure.
+*/
+PHOS_GUI_API int phos_gui_add_elem_to_container(phos_gui_elem *container, phos_gui_elem *elem);
 /**
   Obtains a UI element with a specific ID.
 */
