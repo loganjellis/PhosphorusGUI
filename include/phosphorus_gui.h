@@ -21,6 +21,22 @@
 typedef enum phos_gui_elem_type
 {
 	/**
+	  The default element type.
+	  
+	  Indicates invalid state.
+	*/
+	PHOS_GUI_INVALID_ELEM_TYPE,
+	/**
+	  The container element type.
+
+	  A container element is a special type of element.
+	  A container is used to hold and organize other elements,
+	  which are called its children. The container becomes the
+	  parent element of all the child elements. Container
+	  elements behave like any other type of element.
+	*/
+	PHOS_GUI_CONTAINER,
+	/**
 	  The button element type.
 	*/
 	PHOS_GUI_BUTTON,
@@ -42,7 +58,11 @@ typedef enum phos_gui_elem_shape
 	/**
 	  The ellipse shape.
 	*/
-	PHOS_GUI_ELLIPSE
+	PHOS_GUI_ELLIPSE,
+	/**
+	  The rounded-rectangle shape.
+	*/
+	PHOS_GUI_ROUND_RECT
 } phos_gui_elem_shape;
 
 /**
@@ -128,6 +148,8 @@ typedef enum phos_gui_layout_type
 
 	  When margin collisions occur, this layout resolves
 	  them by pushing the colliding objects down.
+
+	  @note This is the default layout type.
 	*/
 	PHOS_GUI_VERTICAL_LAYOUT,
 	/**
@@ -159,7 +181,19 @@ typedef enum phos_gui_layout_type
 /**
   The default font size for a text component.
 */
-#define PHOS_GUI_DEFAULT_FONT_SIZE 32.0f
+#define PHOS_GUI_FONT_SIZE_DEFAULT PHOS_GUI_FONT_SIZE_LARGE
+/**
+  Small font size.
+*/
+#define PHOS_GUI_FONT_SIZE_SMALL 8.0f
+/**
+  Medium font size.
+*/
+#define PHOS_GUI_FONT_SIZE_MED 16.0f
+/**
+  Large font size.
+*/
+#define PHOS_GUI_FONT_SIZE_LARGE 32.0f
 
 /**
   A phos_gui_text_component represents a piece of
@@ -416,9 +450,19 @@ typedef struct phos_gui_elem
 	  @note If set to 0, it will not be visible.
 	*/
 	float outline_thickness;
+	/**
+	  The roundness of the element's corners.
+
+	  @note This value is only used for elements with the
+	  PHOS_GUI_ROUND_RECT shape.
+
+	  @important This value should remain in between
+	  0.0f (no roundness) and 1.0f (full roundness).
+	*/
+	float corner_radius;
 
 	/**
-	  Padding on the left side of the element.
+	  Paddig on the left side of the element.
 
 	  @note Make sure this value remains >= 0.
 	*/
@@ -503,7 +547,8 @@ typedef struct phos_gui_elem
   A phos_gui is used to store and organize UI elements.
 
   It represents the scene, or the context, in which the
-  elements live in.
+  elements live in. This makes a phos_gui the top-level
+  container.
 */
 typedef struct phos_gui
 {
@@ -691,6 +736,10 @@ PHOS_GUI_API void phos_gui_init_text(phos_gui_elem *elem, const char *str, float
 PHOS_GUI_API void phos_gui_init_placeholder_text(phos_gui_elem *elem, const char *str, Color color);
 
 /**
+  Quickly sets the position of an element.
+*/
+PHOS_GUI_API void phos_gui_set_elem_pos(phos_gui_elem *elem, float x, float y);
+/**
   Quickly sets the bounds of an element (its position and size).
 */
 PHOS_GUI_API void phos_gui_set_elem_bounds(phos_gui_elem *elem, float x, float y, float w, float h);
@@ -727,24 +776,34 @@ PHOS_GUI_API void phos_gui_gen_color_set(phos_gui_color_set *set, Color normal_c
 PHOS_GUI_API void phos_gui_set_text_contents(phos_gui_elem *elem, char *target_str, const char *str);
 
 /**
-  Calculates the position of an object if it were aligned with the given element
+  Calculates the position of an object if it were aligned with the given reference element
   using the given alignment. The returned position is not a relative position, it
   is absolute.
 
-  @param elem The element to align against.
+  @param reference_elem The element to align with.
   @param alignment The alignment to use.
-  @param object_size The size of whatever is being aligned against 'elem'. Can be another object, element, text, etc.
+  @param target_object_size The size of whatever is being aligned with 'reference_elem'.
+  Can be another object, element, text, etc.
 */
-PHOS_GUI_API Vector2 phos_gui_align(phos_gui_elem *elem, phos_gui_alignment alignment, Vector2 object_size);
+PHOS_GUI_API Vector2 phos_gui_get_proposed_align_pos(const phos_gui_elem *const reference_elem, phos_gui_alignment alignment, Vector2 target_object_size);
 /**
   Calculates the position of the text component of an element based on an alignment.
 
-  @param elem The element to align against.
+  @param reference_elem The element to align with.
   @param alignment The alignment to use.
-  @param target_str The string buffer on the element to use when aligning. For example, if using placeholder text,
-  pass in 'elem -> text.placeholder_str'.
+  @param target_str The string buffer on the element to use when aligning. For example, to use placeholder text,
+  pass in 'reference_elem -> text.placeholder_str'.
 */
-PHOS_GUI_API Vector2 phos_gui_align_text(phos_gui_elem *elem, phos_gui_alignment alignment, const char *target_str);
+PHOS_GUI_API Vector2 phos_gui_get_proposed_text_align_pos(const phos_gui_elem *const reference_elem, phos_gui_alignment alignment, const char *target_str);
+/**
+  Calculates the position of 'target_elem' if it were aligned with 'reference_elem'
+  using the given alignment.
+
+  @param target_elem The element to move and align.
+  @param alignment The alignment to use.
+  @param reference_elem The element 'target_elem' is being aligned with.
+*/
+PHOS_GUI_API Vector2 phos_gui_align_elem(phos_gui_elem *target_elem, phos_gui_alignment alignment, const phos_gui_elem *const reference_elem);
 
 /**
   Sets the padding on an element.
@@ -821,6 +880,14 @@ PHOS_GUI_API void phos_gui_init_clone(phos_gui_elem *target_elem, const char *ID
   @note This function does not affect the window.
 */
 PHOS_GUI_API void phos_gui_set_win_scale(float x, float y);
+
+/**
+  Obtains the current mouse position. This function
+  takes the current window scale into affect.
+
+  To set window scale, use phos_gui_set_win_scale(float, float).
+*/
+PHOS_GUI_API Vector2 phos_gui_get_mouse_pos(void);
 
 /**
   Updates the current phos_gui's elements.

@@ -1,6 +1,7 @@
 #include <math.h>
 #include <ctype.h>
 #include "dynamic_array_spellbook.h"
+#include "raylib.h"
 #include "vibrant_logs.h"
 #include "phosphorus_gui.h"
 #include "raymath.h"
@@ -12,6 +13,8 @@
 #define PHOS_GUI_CURSOR_WIDTH 3
 #define PHOS_GUI_KEY_REPEAT_DELAY 0.5f
 #define PHOS_GUI_KEY_REPEAT_INTERVAL 0.033f
+
+#define PHOS_GUI_ROUND_RECT_SEGMENTS 64
 
 // array of element pointers
 typedef struct phos_gui_elem_arr
@@ -538,6 +541,21 @@ void phos_gui_init_placeholder_text(phos_gui_elem *elem, const char *str, Color 
 	elem -> text.placeholder_color = color;
 }
 
+void phos_gui_set_elem_pos(phos_gui_elem *elem, float x, float y)
+{
+	if(!elem)
+	{
+		vl_log(VL_ERROR, "Cannot move a null UI element!\n");
+		return;
+	}
+
+	// find difference between current pos and new pos
+	float x_diff = x - elem -> pos.x;
+	float y_diff = y - elem -> pos.y;
+
+	// move based on difference
+	phos_gui_move_elem(elem, x_diff, y_diff);
+}
 void phos_gui_set_elem_bounds(phos_gui_elem *elem, float x, float y, float w, float h)
 {
 	if(!elem)
@@ -610,65 +628,94 @@ void phos_gui_set_text_contents(phos_gui_elem *elem, char *target_str, const cha
 	elem -> text.cursor_pos = strlen(target_str);
 }
 
-Vector2 phos_gui_align(phos_gui_elem *elem, phos_gui_alignment alignment, Vector2 object_size)
+Vector2 phos_gui_get_proposed_align_pos(const phos_gui_elem *const reference_elem, phos_gui_alignment alignment, Vector2 target_object_size)
 {
 	Vector2 v = {0};
 
-	if(!elem)
+	if(!reference_elem)
 	{
 		vl_log(VL_ERROR, "Cannot align null UI element!\n");
 		return v;
 	}
 
-	// define rectangle bounds for element using padding
-	float content_top = elem -> pos.y + elem -> top_padding;
-	float content_left = elem -> pos.x + elem -> left_padding;
-	float content_bottom = elem -> pos.y + elem -> size.y - elem -> bottom_padding;
-	float content_right = elem -> pos.x + elem -> size.x - elem -> right_padding;
+	// define rectangle bounds for element's content area (visible area + padding)
+	float content_top = reference_elem -> pos.y + reference_elem -> top_padding;
+	float content_left = reference_elem -> pos.x + reference_elem -> left_padding;
+	float content_bottom = reference_elem -> pos.y + reference_elem -> size.y - reference_elem -> bottom_padding;
+	float content_right = reference_elem -> pos.x + reference_elem -> size.x - reference_elem -> right_padding;
 	float content_width = content_right - content_left;
 	float content_height = content_bottom - content_top;
+
+	// define rectangle bounds for element's logical area (visible_area + margin)
+	float elem_top = reference_elem -> pos.y - reference_elem -> top_margin;
+	float elem_left = reference_elem -> pos.x - reference_elem -> left_margin;
+	float elem_bottom = reference_elem -> pos.y + reference_elem -> size.y + reference_elem -> bottom_margin;
+	float elem_right = reference_elem -> pos.x + reference_elem -> size.x + reference_elem -> right_margin;
+	float elem_width = elem_right - elem_left;
+	float elem_height = elem_bottom - elem_top;
 
 	switch(alignment)
 	{
 		case PHOS_GUI_ALIGN_INNER_TOP:
-			v.x = content_left + (content_width - object_size.x) / 2.0f;
+			v.x = content_left + (content_width - target_object_size.x) / 2.0f;
 			v.y = content_top;
 			break;
 		case PHOS_GUI_ALIGN_INNER_LEFT:
 			v.x = content_left;
-			v.y = content_top + (content_height - object_size.y) / 2.0f;
+			v.y = content_top + (content_height - target_object_size.y) / 2.0f;
 			break;
 		case PHOS_GUI_ALIGN_INNER_BOTTOM:
-			v.x = content_left + (content_width - object_size.x)  / 2.0f;
-			v.y = content_bottom - object_size.y;
+			v.x = content_left + (content_width - target_object_size.x)  / 2.0f;
+			v.y = content_bottom - target_object_size.y;
 			break;
 		case PHOS_GUI_ALIGN_INNER_RIGHT:
-			v.x = content_right - object_size.x;
-			v.y = content_top + (content_height - object_size.y) / 2.0f;
+			v.x = content_right - target_object_size.x;
+			v.y = content_top + (content_height - target_object_size.y) / 2.0f;
 			break;
 		case PHOS_GUI_ALIGN_INNER_CENTER:
-			v.x = content_left + (content_width - object_size.x) / 2.0f;
-			v.y = content_top + (content_height - object_size.y) / 2.0f;
+			v.x = content_left + (content_width - target_object_size.x) / 2.0f;
+			v.y = content_top + (content_height - target_object_size.y) / 2.0f;
 			break;
 		case PHOS_GUI_ALIGN_ABOVE:
-			// TODO
+			v.x = elem_left + (elem_width - target_object_size.x) / 2.0f;
+			v.y = elem_top - target_object_size.y;
 			break;
 	}
 
 	return v;
 }
-Vector2 phos_gui_align_text(phos_gui_elem *elem, phos_gui_alignment alignment, const char *target_str)
+Vector2 phos_gui_get_proposed_text_align_pos(const phos_gui_elem *const reference_elem, phos_gui_alignment alignment, const char *target_str)
 {
 	Vector2 v = {0};
 
-	if(!elem)
+	if(!reference_elem)
 	{
 		vl_log(VL_ERROR, "Cannot align text on null UI element!\n");
 		return v;
 	}
 
-	Rectangle elem_text_size = phos_gui_get_text_bounds(elem, target_str);
-	v = phos_gui_align(elem, alignment, (Vector2) { elem_text_size.width, elem_text_size.height });
+	Rectangle elem_text_size = phos_gui_get_text_bounds(reference_elem, target_str);
+	v = phos_gui_get_proposed_align_pos(reference_elem, alignment, (Vector2) { elem_text_size.width, elem_text_size.height });
+	return v;
+}
+Vector2 phos_gui_align_elem(phos_gui_elem *target_elem, phos_gui_alignment alignment, const phos_gui_elem *const reference_elem)
+{
+	Vector2 v = {0};
+
+	if(!target_elem)
+	{
+		vl_log(VL_ERROR, "Cannot align null target element!\n");
+		return v;
+	}
+	if(!reference_elem)
+	{
+		vl_log(VL_ERROR, "Cannot align target element with null reference element!\n");
+		return v;
+	}
+
+	v = phos_gui_get_proposed_align_pos(reference_elem, alignment, target_elem -> size);
+	phos_gui_set_elem_pos(target_elem, v.x, v.y);
+
 	return v;
 }
 
@@ -986,6 +1033,16 @@ void phos_gui_set_win_scale(float x, float y)
 	win_scale_y = y;
 }
 
+Vector2 phos_gui_get_mouse_pos()
+{
+	Vector2 mouse_pos = GetMousePosition();
+
+	mouse_pos.x /= win_scale_x;
+	mouse_pos.y /= win_scale_y;
+
+	return mouse_pos;
+}
+
 static void phos_gui_move_cursor_left(phos_gui_elem *e)
 {
 	if(e -> text.cursor_pos > 0)
@@ -1099,11 +1156,7 @@ static bool phos_gui_travel_elems()
 static void phos_gui_update_elem(phos_gui_elem *e, float dt)
 {
 	// get mouse information
-	Vector2 mouse_pos = GetMousePosition();
-
-	// take window scale into affect
-	mouse_pos.x /= win_scale_x;
-	mouse_pos.y /= win_scale_y;
+	Vector2 mouse_pos = phos_gui_get_mouse_pos();
 
 	bool mouse_clicked = IsMouseButtonPressed(MOUSE_BUTTON_LEFT);
 	bool mouse_down = IsMouseButtonDown(MOUSE_BUTTON_LEFT);
@@ -1244,7 +1297,7 @@ void phos_gui_update(float dt)
 	}
 
 	// if any margin collisions, resolve them immediately
-	phos_gui_resolve_margin_collisions(curr_gui);
+	// TODO un-comment: phos_gui_resolve_margin_collisions(curr_gui);
 
 	// 'tab' and 'shift+tab' to travel between elems
 	phos_gui_travel_elems();
@@ -1252,6 +1305,12 @@ void phos_gui_update(float dt)
 	// update elems:
 	for(size_t i = 0; i < curr_gui -> num_elems; ++i)
 	{
+		if(curr_gui -> elems[i] -> type == PHOS_GUI_INVALID_ELEM_TYPE)
+		{
+			vl_delay_log(VL_ERROR, 1.0f, "Element has invalid type: '%s'!\n", curr_gui -> elems[i] -> ID);
+			continue;
+		}
+
 		phos_gui_update_elem(curr_gui -> elems[i], dt);
 
 		// if elem gained focus, make this elem the current one
@@ -1315,6 +1374,9 @@ static void phos_gui_render_elem(const phos_gui_elem *const e)
 			case PHOS_GUI_ELLIPSE:
 				DrawEllipse(vis_bounds.x + e_rx, vis_bounds.y + e_ry, e_rx, e_ry, primary_color);
 				break;
+			case PHOS_GUI_ROUND_RECT:
+				DrawRectangleRounded(vis_bounds, e -> corner_radius, PHOS_GUI_ROUND_RECT_SEGMENTS, primary_color);
+				break;
 		}
 	}
 
@@ -1357,6 +1419,9 @@ static void phos_gui_render_elem(const phos_gui_elem *const e)
 						DrawRectangle(cx, draw_pos.y, PHOS_GUI_CURSOR_WIDTH, e -> text.font_size, e -> text.color);
 					}
 					break;
+				default:
+					// for INVALID_ELEM_TYPE or CONTAINER, just skip text component
+					break;
 			}
 
 			EndScissorMode();
@@ -1376,6 +1441,9 @@ static void phos_gui_render_elem(const phos_gui_elem *const e)
 				break;
 			case PHOS_GUI_ELLIPSE:
 				phos_gui_render_ellipse_outline(e -> pos, e_rx, e_ry, e -> outline_thickness, outline_color);
+				break;
+			case PHOS_GUI_ROUND_RECT:
+				DrawRectangleRoundedLinesEx(vis_bounds, e -> corner_radius, PHOS_GUI_ROUND_RECT_SEGMENTS, e -> outline_thickness, outline_color);
 				break;
 		}
 	}
@@ -1401,6 +1469,10 @@ static void phos_gui_render_elem(const phos_gui_elem *const e)
 				phos_gui_render_ellipse_outline(padding_pos, padding_bounds.width / 2.0f, padding_bounds.height / 2.0f, PHOS_GUI_DEBUG_LINE_THICKNESS, PHOS_GUI_DEBUG_PADDING_COLOR);
 				phos_gui_render_ellipse_outline(margin_pos, margin_bounds.width / 2.0f, margin_bounds.height / 2.0f, PHOS_GUI_DEBUG_LINE_THICKNESS, PHOS_GUI_DEBUG_MARGIN_COLOR);
 				break;
+			case PHOS_GUI_ROUND_RECT:
+				DrawRectangleRoundedLinesEx(padding_bounds, e -> corner_radius, PHOS_GUI_ROUND_RECT_SEGMENTS, e -> outline_thickness, PHOS_GUI_DEBUG_PADDING_COLOR);
+				DrawRectangleRoundedLinesEx(margin_bounds, e -> corner_radius, PHOS_GUI_ROUND_RECT_SEGMENTS, e -> outline_thickness, PHOS_GUI_DEBUG_MARGIN_COLOR);
+				break;
 		}
 	}
 }
@@ -1413,7 +1485,15 @@ void phos_gui_render()
 	}
 
 	for(size_t i = 0; i < curr_gui -> num_elems; ++i)
+	{
+		if(curr_gui -> elems[i] -> type == PHOS_GUI_INVALID_ELEM_TYPE)
+		{
+			vl_delay_log(VL_ERROR, 1.0f, "Element has invalid type: '%s'!\n", curr_gui -> elems[i] -> ID);
+			continue;
+		}
+
 		phos_gui_render_elem(curr_gui -> elems[i]);
+	}
 }
 
 Texture2D *phos_gui_load_texture(const char *file_path)
