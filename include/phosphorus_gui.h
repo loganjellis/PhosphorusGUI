@@ -14,6 +14,71 @@
 #include <string.h>
 #include "raylib.h"
 
+
+/**
+  The max number of elements within a single
+  phos_gui instance.
+*/
+#define PHOS_GUI_MAX_ELEMS 64
+
+/**
+  The max number of child elements a parent element
+  can contain.
+*/
+#define PHOS_GUI_MAX_CHILDREN 48
+
+/**
+  The max length of an element's ID.
+*/
+#define PHOS_GUI_MAX_ID_LEN 32
+
+/**
+  The max length of a text component's string.
+*/
+#define PHOS_GUI_MAX_TEXT_LEN 128
+
+/**
+  The default font size for a text component.
+*/
+#define PHOS_GUI_FONT_SIZE_DEFAULT PHOS_GUI_FONT_SIZE_LARGE
+/**
+  Small font size.
+*/
+#define PHOS_GUI_FONT_SIZE_SMALL 8.0f
+/**
+  Medium font size.
+*/
+#define PHOS_GUI_FONT_SIZE_MED 16.0f
+/**
+  Large font size.
+*/
+#define PHOS_GUI_FONT_SIZE_LARGE 32.0f
+/**
+  Extremely large font size.
+*/
+#define PHOS_GUI_FONT_SIZE_XLARGE 48.0f
+/**
+  Huge font size.
+*/
+#define PHOS_GUI_FONT_SIZE_HUGE 64.0f
+/**
+  Extremely huge font size.
+*/
+#define PHOS_GUI_FONT_SIZE_XHUGE 80.0f
+/**
+  The max font size in PhosphorusGUI.
+*/
+#define PHOS_GUI_FONT_SIZE_MAX 128.0f
+
+/**
+  The window's origin.
+*/
+#define PHOS_GUI_WIN_ORIGIN (Vector2) { 0.0f, 0.0f }
+/**
+  The window's current size.
+*/
+#define PHOS_GUI_WIN_SIZE (Vector2) { GetScreenWidth(), GetScreenHeight() }
+
 /**
   Sets the ID field of the given object.
 
@@ -249,61 +314,6 @@ typedef enum phos_gui_component_type
 	PHOS_GUI_COMPONENT_TEXT,
 } phos_gui_component_type;
 
-
-/**
-  The max number of elements within a single
-  phos_gui instance.
-*/
-#define PHOS_GUI_MAX_ELEMS 64
-
-/**
-  The max number of child elements a parent element
-  can contain.
-*/
-#define PHOS_GUI_MAX_CHILDREN 48
-
-/**
-  The max length of an element's ID.
-*/
-#define PHOS_GUI_MAX_ID_LEN 32
-
-/**
-  The max length of a text component's string.
-*/
-#define PHOS_GUI_MAX_TEXT_LEN 128
-
-/**
-  The default font size for a text component.
-*/
-#define PHOS_GUI_FONT_SIZE_DEFAULT PHOS_GUI_FONT_SIZE_LARGE
-/**
-  Small font size.
-*/
-#define PHOS_GUI_FONT_SIZE_SMALL 8.0f
-/**
-  Medium font size.
-*/
-#define PHOS_GUI_FONT_SIZE_MED 16.0f
-/**
-  Large font size.
-*/
-#define PHOS_GUI_FONT_SIZE_LARGE 32.0f
-/**
-  Extremely large font size.
-*/
-#define PHOS_GUI_FONT_SIZE_XLARGE 48.0f
-/**
-  Huge font size.
-*/
-#define PHOS_GUI_FONT_SIZE_HUGE 64.0f
-/**
-  Extremely huge font size.
-*/
-#define PHOS_GUI_FONT_SIZE_XHUGE 80.0f
-/**
-  The max font size in PhosphorusGUI.
-*/
-#define PHOS_GUI_FONT_SIZE_MAX 128.0f
 
 /**
   A phos_gui_text_component represents a piece of
@@ -704,16 +714,6 @@ typedef struct phos_gui
 	*/
 	phos_gui_layout_type layout_type;
 } phos_gui;
-
-
-/**
-  The window's origin.
-*/
-#define PHOS_GUI_WIN_ORIGIN (Vector2) { 0.0f, 0.0f }
-/**
-  The window's current size.
-*/
-#define PHOS_GUI_WIN_SIZE (Vector2) { GetScreenWidth(), GetScreenHeight() }
 
 
 /**
