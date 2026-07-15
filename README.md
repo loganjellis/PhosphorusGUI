@@ -38,10 +38,6 @@ add_subdirectory(PhosphorusGUI)
 target_link_libraries(app PRIVATE PhosphorusGUI::phosphorus_gui)
 ```
 
-## Example
-
-For an example of basic usage of the library, refer to `example.c`:
-
 ## Documentation and Information
 
 Please refer to the PhosphorusGUI documentation <a href="docs/html" target="_blank">here</a>.
