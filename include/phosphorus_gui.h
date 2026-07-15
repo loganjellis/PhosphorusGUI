@@ -238,6 +238,17 @@ typedef enum phos_gui_layout_type
 	PHOS_GUI_LAYOUT_HORIZONTAL,
 } phos_gui_layout_type;
 
+/**
+  The available component types.
+*/
+typedef enum phos_gui_component_type
+{
+	/**
+	  The text component.
+	*/
+	PHOS_GUI_COMPONENT_TEXT,
+} phos_gui_component_type;
+
 
 /**
   The max number of elements within a single
@@ -277,6 +288,22 @@ typedef enum phos_gui_layout_type
   Large font size.
 */
 #define PHOS_GUI_FONT_SIZE_LARGE 32.0f
+/**
+  Extremely large font size.
+*/
+#define PHOS_GUI_FONT_SIZE_XLARGE 48.0f
+/**
+  Huge font size.
+*/
+#define PHOS_GUI_FONT_SIZE_HUGE 64.0f
+/**
+  Extremely huge font size.
+*/
+#define PHOS_GUI_FONT_SIZE_XHUGE 80.0f
+/**
+  The max font size in PhosphorusGUI.
+*/
+#define PHOS_GUI_FONT_SIZE_MAX 128.0f
 
 /**
   A phos_gui_text_component represents a piece of
@@ -299,6 +326,11 @@ typedef struct phos_gui_text_component
 	  Just like the 'str' field, it also allocates (PHOS_GUI_MAX_TEXT_LEN + 1) bytes.
 	*/
 	char placeholder_str[PHOS_GUI_MAX_TEXT_LEN + 1];
+
+	/**
+	  This text component's owner.
+	*/
+	struct phos_gui_elem *owner;
 
 	/**
 	  This text component's font.
@@ -404,8 +436,6 @@ typedef struct phos_gui_text_component
 	bool accept_specials;
 } phos_gui_text_component;
 
-struct phos_gui; // forward declare phos_gui
-
 /**
   A phos_gui_color_set represents a collection
   of colors a UI element uses.
@@ -449,11 +479,6 @@ typedef struct phos_gui_elem
 	  This element's children.
 	*/
 	struct phos_gui_elem *children[PHOS_GUI_MAX_CHILDREN];
-
-	/**
-	  This element's text component.
-	*/
-	phos_gui_text_component text;
 
 	/**
 	  This UI element's ID.
@@ -654,6 +679,7 @@ typedef struct phos_gui
 	  The elements inside the GUI.
 	*/
 	phos_gui_elem *elems[PHOS_GUI_MAX_ELEMS];
+
 	/**
 	  This GUI's ID.
 
@@ -667,10 +693,12 @@ typedef struct phos_gui
 	  ID to '!auto' and it will be properly set. 
 	*/
 	char ID[PHOS_GUI_MAX_ID_LEN + 1];
+
 	/**
 	  The current amount of elements inside this GUI.
 	*/
 	size_t num_elems;
+
 	/**
 	  The layout of this GUI.
 	*/
@@ -808,13 +836,20 @@ PHOS_GUI_API Rectangle phos_gui_get_outer_elem_rect(const phos_gui_elem *const e
 PHOS_GUI_API Rectangle phos_gui_get_visible_elem_rect(const phos_gui_elem *const elem);
 
 /**
-  Returns the bounds of an element's text component.
+  Returns the bounds of a text component.
 
-  @note Because an element contains primary text ('str') and
+  @note Because a text component contains primary text ('str') and
   placeholder text ('placeholder_str'), you must also pass
   the target string to use.
 */
-PHOS_GUI_API Rectangle phos_gui_get_text_bounds(const phos_gui_elem *const elem, const char *str);
+PHOS_GUI_API Rectangle phos_gui_get_text_bounds(const phos_gui_text_component *const text_component, const char *str);
+/**
+  Returns the bounds of a text component in the form of a Vector2.
+  The vector returned only contains the width and height of the text.
+
+  @see phos_gui_get_text_bounds(const phos_gui_text_component *const, const char*)
+*/
+PHOS_GUI_API Vector2 phos_gui_get_text_bounds_v(const phos_gui_text_component *const text_component, const char *str);
 
 /**
   Initializes an element's text component.
@@ -823,19 +858,23 @@ PHOS_GUI_API Rectangle phos_gui_get_text_bounds(const phos_gui_elem *const elem,
   text of the element ('str'). To initialize placeholder
   text, use phos_gui_init_placeholder_text(...).
 */
-PHOS_GUI_API void phos_gui_init_text(phos_gui_elem *elem, const char *str, float font_size, Color color);
+PHOS_GUI_API void phos_gui_init_text(phos_gui_text_component *text, const char *str, float font_size, Color color);
 /**
   Initializes an element's text component.
 
   @note This function initializes the placeholder
   text of the text component.
 */
-PHOS_GUI_API void phos_gui_init_placeholder_text(phos_gui_elem *elem, const char *str, Color color);
+PHOS_GUI_API void phos_gui_init_placeholder_text(phos_gui_text_component *text, const char *str, Color color);
 
 /**
   Quickly sets the position of an element.
 */
 PHOS_GUI_API void phos_gui_set_elem_pos(phos_gui_elem *elem, float x, float y);
+/**
+  Quickly sets the size of an element.
+*/
+PHOS_GUI_API void phos_gui_set_elem_size(phos_gui_elem *elem, float w, float h);
 /**
   Quickly sets the bounds of an element (its position and size).
 */
@@ -866,11 +905,11 @@ PHOS_GUI_API void phos_gui_gen_color_set(phos_gui_color_set *set, Color normal_c
 /**
   Sets the contents of the given element's text component.
 
-  @param elem The element to modify.
-  @param target_str The specific string buffer to set on the element ('str' or 'placeholder_str').
+  @param text_component The text component to modify.
+  @param target_str The specific string buffer to set on the text component ('str' or 'placeholder_str').
   @param str The string that should occupy the target string given.
 */
-PHOS_GUI_API void phos_gui_set_text_contents(phos_gui_elem *elem, char *target_str, const char *str);
+PHOS_GUI_API void phos_gui_set_text_contents(phos_gui_text_component *text_component, char *target_str, const char *str);
 
 /**
   Calculates the position of an object if it were aligned with the given reference element
@@ -891,7 +930,7 @@ PHOS_GUI_API Vector2 phos_gui_get_proposed_align_pos(const phos_gui_elem *const 
   @param target_str The string buffer on the element to use when aligning. For example, to use placeholder text,
   pass in 'reference_elem -> text.placeholder_str'.
 */
-PHOS_GUI_API Vector2 phos_gui_get_proposed_text_align_pos(const phos_gui_elem *const reference_elem, phos_gui_alignment alignment, const char *target_str);
+PHOS_GUI_API Vector2 phos_gui_get_proposed_text_align_pos(const phos_gui_text_component *const reference_text_component, phos_gui_alignment alignment, const char *target_str);
 /**
   Calculates the position of 'target_elem' if it were aligned with 'reference_elem'
   using the given alignment.
@@ -901,6 +940,32 @@ PHOS_GUI_API Vector2 phos_gui_get_proposed_text_align_pos(const phos_gui_elem *c
   @param reference_elem The element 'target_elem' is being aligned with.
 */
 PHOS_GUI_API Vector2 phos_gui_align_elem(phos_gui_elem *target_elem, phos_gui_alignment alignment, const phos_gui_elem *const reference_elem);
+
+/**
+  Calculates the largest possible font size for a text component to fit within
+  the inner bounds of an element.
+
+  @param elem The element to work with.
+  @param text_component The element's text component.
+  @param text_component_target_str The target string buffer on the text component to work with.
+*/
+PHOS_GUI_API void phos_gui_use_largest_possible_font_size(phos_gui_elem *elem, phos_gui_text_component *text_component, const char *text_component_target_str);
+/**
+  Makes the given element fit the given text component's bounds.
+
+  @note This makes the element's visible bounds exactly equal to the text's bounds.
+  In most cases, this will shrink the element down drastically. To make the element
+  fit a text component but retain its original size, use phos_gui_make_elem_fit_text(...).
+*/
+PHOS_GUI_API void phos_gui_clamp_elem_to_text(phos_gui_elem *elem, phos_gui_text_component *text_component, const char *text_component_target_str);
+/**
+  Makes the given element fit the given text component's bounds.
+
+  @note This function only expands the element's size to fit the text.
+  Due to elements having children/parents, this function will call
+  itself for each parent linked to the given element.
+*/
+PHOS_GUI_API void phos_gui_make_elem_fit_text(phos_gui_elem *elem, phos_gui_text_component *text_component, const char *text_component_target_str);
 
 /**
   Sets the padding on an element.
@@ -980,6 +1045,28 @@ PHOS_GUI_API void phos_gui_clone_elem(phos_gui_elem *elem, const char *ID);
   @see phos_gui_remove_elem(phos_gui*, phos_gui_elem*)
 */
 PHOS_GUI_API void phos_gui_init_clone(phos_gui_elem *target_elem, const char *ID);
+
+/**
+  Adds a component of the specified type to an element.
+
+  @important Since some functions check for specific components
+  on elements, it is recommended that you add all necessary components
+  to each element as soon as possible. If you don't, you may see warning
+  or error messages delay-logged that are incorrect at their time of printing.
+
+  @return NULL on failure.
+*/
+PHOS_GUI_API void *phos_gui_add_component(phos_gui_elem *elem, phos_gui_component_type type);
+/**
+  Determines if an element has a specific component.
+*/
+PHOS_GUI_API bool phos_gui_elem_has_component(const phos_gui_elem *const elem, phos_gui_component_type type);
+/**
+  Obtains a component on an element.
+
+  @return NULL if the component is not found on the element.
+*/
+PHOS_GUI_API void *phos_gui_get_component(const phos_gui_elem *const elem, phos_gui_component_type type);
 
 /**
   Sets the global window scale in PhosphorusGUI.
