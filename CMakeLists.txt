@@ -7,8 +7,6 @@ set(CMAKE_C_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_COMPILER "C:/ProgramData/mingw64/mingw64/bin/gcc.exe")
 
-option(BUILD_SHARED_LIBS "Build using a shared library." ON)
-
 include(FetchContent)
 FetchContent_Declare(vibrant_logs GIT_REPOSITORY https://github.com/loganjellis/VibrantLogs.git GIT_TAG main)
 FetchContent_Declare(dynamic_array_spellbook GIT_REPOSITORY https://github.com/loganjellis/DynamicArraySpellbook.git GIT_TAG main)
@@ -18,6 +16,7 @@ FetchContent_MakeAvailable(vibrant_logs dynamic_array_spellbook dynamic_map_spel
 
 add_library(phosphorus_gui "${CMAKE_CURRENT_SOURCE_DIR}/src/phosphorus_gui.c")
 
+option(BUILD_SHARED_LIBS "Build using a shared library." ON)
 target_compile_definitions(phosphorus_gui PRIVATE $<$<BOOL:${BUILD_SHARED_LIBS}>:PHOS_GUI_EXPORTS>)
 
 target_include_directories(phosphorus_gui PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
