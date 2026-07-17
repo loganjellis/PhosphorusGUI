@@ -154,6 +154,13 @@ static void phos_gui_init_text_component(void *text_component, void *owner)
 
 	vl_log(VL_SUCCESS, "Added text component to '%s'!\n", elem->ID);
 }
+static void phos_gui_clone_text_component(const void *const src, void *target)
+{
+	const phos_gui_text_component *const src_tc = src;
+	phos_gui_text_component *target_tc = target;
+
+	*target_tc = *src_tc;
+}
 
 int phos_gui_init()
 {
@@ -177,7 +184,7 @@ int phos_gui_init()
 	right_arrow_timer.key = KEY_RIGHT;
 
 	// register PhosphorusGUI component types
-	pluto_cs_register(PHOS_GUI_COMPONENT_TEXT, sizeof(phos_gui_text_component), phos_gui_init_text_component);
+	pluto_cs_register(PHOS_GUI_COMPONENT_TEXT, sizeof(phos_gui_text_component), phos_gui_init_text_component, phos_gui_clone_text_component);
 
 	init = true;
 	vl_log(VL_SUCCESS, "Initialized PhosphorusGUI!\n");
@@ -1343,6 +1350,10 @@ void phos_gui_init_clone(phos_gui_elem *target_elem, const char *ID)
 	// start creating new instance (with an auto-generated ID)
 	*target_elem = *bp->elem;
 	phos_gui_auto_gen_id("auto", target_elem->ID, "elem", &elem_auto_id);
+
+	// clone elements from bp->elem onto target_elem
+	if(pluto_cs_clone_components(bp->elem, target_elem) == 0)
+		vl_log(VL_ERROR, "Failed to initialize a cloned element! Cloning components failed! Source element: '%s', target element: '%s'", bp->elem->ID, target_elem->ID);
 }
 
 void phos_gui_set_win_scale(float x, float y)
