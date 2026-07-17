@@ -183,6 +183,7 @@ int phos_gui_init()
 	phos_gui_init_arr(&textures, 0);
 	phos_gui_init_arr(&fonts, 0);
 
+	// keyboard input:
 	backspace_timer.key = KEY_BACKSPACE;
 	left_arrow_timer.key = KEY_LEFT;
 	right_arrow_timer.key = KEY_RIGHT;
@@ -192,6 +193,7 @@ int phos_gui_init()
 
 	init = true;
 	vl_log(VL_SUCCESS, "Initialized PhosphorusGUI!\n");
+
 	return 1;
 }
 void phos_gui_shutdown()
@@ -369,6 +371,87 @@ void phos_gui_move_elem_xy(phos_gui_elem *elem, float x, float y)
 		phos_gui_move_elem_xy(elem->children[i], x, y);
 }
 
+static Vector2 phos_gui_get_proposed_align_pos(const Rectangle rect, phos_gui_alignment alignment, Vector2 target_object_size)
+{
+	Vector2 v = {0};
+
+	// start at rect origin
+	v = phos_gui_get_rect_pos(rect);
+
+	switch(alignment)
+	{
+		// v already starts at top-left
+		case PHOS_GUI_ALIGN_INNER_TOP_LEFT:
+			break;
+
+		case PHOS_GUI_ALIGN_INNER_TOP:
+			v.x += (rect.width - target_object_size.x) / 2.0f;
+			break;
+		case PHOS_GUI_ALIGN_INNER_LEFT:
+			v.y += (rect.height - target_object_size.y) / 2.0f;
+			break;
+		case PHOS_GUI_ALIGN_INNER_BOTTOM:
+			v.x += (rect.width - target_object_size.x) / 2.0f;
+			v.y += (rect.height - target_object_size.y);
+			break;
+		case PHOS_GUI_ALIGN_INNER_RIGHT:
+			v.x += (rect.width - target_object_size.x);
+			v.y += (rect.height - target_object_size.y) / 2.0f;
+			break;
+		case PHOS_GUI_ALIGN_INNER_CENTER:
+			v.x += (rect.width - target_object_size.x) / 2.0f;
+			v.y += (rect.height - target_object_size.y) / 2.0f;
+			break;
+		case PHOS_GUI_ALIGN_INNER_TOP_RIGHT:
+			v.x += (rect.width - target_object_size.x);
+			break;
+		case PHOS_GUI_ALIGN_INNER_BOTTOM_LEFT:
+			v.y += (rect.height - target_object_size.y);
+			break;
+		case PHOS_GUI_ALIGN_INNER_BOTTOM_RIGHT:
+			v.x += (rect.width - target_object_size.x);
+			v.y += (rect.height - target_object_size.y);
+			break;
+		case PHOS_GUI_ALIGN_LEFT:
+			v.x -= target_object_size.x;
+			v.y += (rect.height - target_object_size.y) / 2.0f;
+			break;
+		case PHOS_GUI_ALIGN_TOP:
+			v.x += (rect.width - target_object_size.x) / 2.0f;
+			v.y -= target_object_size.y;
+			break;
+		case PHOS_GUI_ALIGN_RIGHT:
+			v.x += rect.width;
+			v.y += (rect.height - target_object_size.y) / 2.0f;
+			break;
+		case PHOS_GUI_ALIGN_BOTTOM:
+			v.x += (rect.width - target_object_size.x) / 2.0f;
+			v.y += rect.height;
+			break;
+		case PHOS_GUI_ALIGN_TOP_LEFT:
+			v.x -= target_object_size.x;
+			v.y -= target_object_size.y;
+			break;
+		case PHOS_GUI_ALIGN_TOP_RIGHT:
+			v.x += rect.width;
+			v.y -= target_object_size.y;
+			break;
+		case PHOS_GUI_ALIGN_BOTTOM_LEFT:
+			v.x -= target_object_size.x;
+			v.y += rect.height + target_object_size.y;
+			break;
+		case PHOS_GUI_ALIGN_BOTTOM_RIGHT:
+			v.x += rect.width;
+			v.y += rect.height + target_object_size.y;
+			break;
+		default:
+			vl_log(VL_ERROR, "Invalid alignment: %d!\n", alignment);
+			break;
+	}
+
+	return v;
+}
+
 static void phos_gui_resize_single_elem_wh(phos_gui_elem *elem, float w, float h, phos_gui_opts opts)
 {
 	// first see what new elem size would be
@@ -422,7 +505,7 @@ static void phos_gui_resize_single_elem_wh(phos_gui_elem *elem, float w, float h
 		
 		// restore text's pos
 		Vector2 text_bounds = phos_gui_get_text_bounds_v(elem_tx, elem_tx->str);
-		elem_tx->pos = phos_gui_get_proposed_align_pos(elem, elem_tx->alignment, text_bounds);
+		elem_tx->pos = phos_gui_get_proposed_align_pos(phos_gui_get_elem_content_area(elem), elem_tx->alignment, text_bounds);
 	}
 }
 void phos_gui_resize_elem_wh(phos_gui_elem *elem, float w, float h, phos_gui_opts opts)
@@ -825,95 +908,6 @@ void phos_gui_set_text_contents(phos_gui_text_component *text_component, char *t
 	text_component->cursor_pos = strlen(target_str);
 }
 
-Vector2 phos_gui_get_proposed_align_pos(const phos_gui_elem *const reference_elem, phos_gui_alignment alignment, Vector2 target_object_size)
-{
-	Vector2 v = {0};
-
-	if(!reference_elem)
-	{
-		vl_log(VL_ERROR, "Cannot align null UI element!\n");
-		return v;
-	}
-
-	// get elem content area
-	Rectangle rect = phos_gui_get_elem_content_area(reference_elem);
-
-	// start at rect origin
-	v = phos_gui_get_rect_pos(rect);
-
-	switch(alignment)
-	{
-		// v already starts at top-left
-		case PHOS_GUI_ALIGN_INNER_TOP_LEFT:
-			break;
-
-		case PHOS_GUI_ALIGN_INNER_TOP:
-			v.x += (rect.width - target_object_size.x) / 2.0f;
-			break;
-		case PHOS_GUI_ALIGN_INNER_LEFT:
-			v.y += (rect.height - target_object_size.y) / 2.0f;
-			break;
-		case PHOS_GUI_ALIGN_INNER_BOTTOM:
-			v.x += (rect.width - target_object_size.x) / 2.0f;
-			v.y += (rect.height - target_object_size.y);
-			break;
-		case PHOS_GUI_ALIGN_INNER_RIGHT:
-			v.x += (rect.width - target_object_size.x);
-			v.y += (rect.height - target_object_size.y) / 2.0f;
-			break;
-		case PHOS_GUI_ALIGN_INNER_CENTER:
-			v.x += (rect.width - target_object_size.x) / 2.0f;
-			v.y += (rect.height - target_object_size.y) / 2.0f;
-			break;
-		case PHOS_GUI_ALIGN_INNER_TOP_RIGHT:
-			v.x += (rect.width - target_object_size.x);
-			break;
-		case PHOS_GUI_ALIGN_INNER_BOTTOM_LEFT:
-			v.y += (rect.height - target_object_size.y);
-			break;
-		case PHOS_GUI_ALIGN_INNER_BOTTOM_RIGHT:
-			v.x += (rect.width - target_object_size.x);
-			v.y += (rect.height - target_object_size.y);
-			break;
-		case PHOS_GUI_ALIGN_LEFT:
-			v.x -= target_object_size.x;
-			v.y += (rect.height - target_object_size.y) / 2.0f;
-			break;
-		case PHOS_GUI_ALIGN_TOP:
-			v.x += (rect.width - target_object_size.x) / 2.0f;
-			v.y -= target_object_size.y;
-			break;
-		case PHOS_GUI_ALIGN_RIGHT:
-			v.x += rect.width;
-			v.y += (rect.height - target_object_size.y) / 2.0f;
-			break;
-		case PHOS_GUI_ALIGN_BOTTOM:
-			v.x += (rect.width - target_object_size.x) / 2.0f;
-			v.y += rect.height;
-			break;
-		case PHOS_GUI_ALIGN_TOP_LEFT:
-			v.x -= target_object_size.x;
-			v.y -= target_object_size.y;
-			break;
-		case PHOS_GUI_ALIGN_TOP_RIGHT:
-			v.x += rect.width;
-			v.y -= target_object_size.y;
-			break;
-		case PHOS_GUI_ALIGN_BOTTOM_LEFT:
-			v.x -= target_object_size.x;
-			v.y += rect.height + target_object_size.y;
-			break;
-		case PHOS_GUI_ALIGN_BOTTOM_RIGHT:
-			v.x += rect.width;
-			v.y += rect.height + target_object_size.y;
-			break;
-		default:
-			vl_log(VL_ERROR, "Invalid alignment: %d!\n", alignment);
-			break;
-	}
-
-	return v;
-}
 Vector2 phos_gui_align_elem_text(phos_gui_text_component *text_component, phos_gui_alignment alignment, const char *target_str)
 {
 	Vector2 v = {0};
@@ -937,7 +931,7 @@ Vector2 phos_gui_align_elem_text(phos_gui_text_component *text_component, phos_g
 	}
 
 	Rectangle elem_text_size = phos_gui_get_text_bounds(text_component, target_str);
-	v = phos_gui_get_proposed_align_pos(text_component->owner, alignment, (Vector2) { elem_text_size.width, elem_text_size.height });
+	v = phos_gui_get_proposed_align_pos(phos_gui_get_elem_content_area(text_component->owner), alignment, (Vector2) { elem_text_size.width, elem_text_size.height });
 	text_component->pos = v;
 	text_component->alignment = alignment;
 	return v;
@@ -957,10 +951,105 @@ Vector2 phos_gui_align_elem(phos_gui_elem *target_elem, phos_gui_alignment align
 		return v;
 	}
 
-	v = phos_gui_get_proposed_align_pos(reference_elem, alignment, phos_gui_get_rect_size(phos_gui_get_elem_rect(target_elem)));
+	target_elem->alignment = alignment;
+	v = phos_gui_get_proposed_align_pos(phos_gui_get_elem_content_area(reference_elem), target_elem->alignment, phos_gui_get_rect_size(phos_gui_get_elem_rect(target_elem)));
 	phos_gui_set_elem_pos(target_elem, v.x, v.y);
 
 	return v;
+}
+
+static bool phos_gui_elem_in_bounds(phos_gui_elem *elem, Vector2 origin, Vector2 size)
+{
+	// get elem rect
+	Rectangle r = phos_gui_get_elem_rect(elem);
+
+	// see if either rect is out of bounds (origin + size)
+	if(r.x < origin.x || r.x + r.width > origin.x + size.x ||
+			r.y < origin.y || r.y + r.height > origin.y + size.y)
+	{
+		vl_log(VL_ERROR, "Element '%s' is out of bounds (%.2f, %.2f, %.2f, %.2f)!\n", elem->ID, origin.x, origin.y, size.x, size.y);
+		return false;
+	}
+
+	return true;
+}
+static bool phos_gui_check_elem_collision(phos_gui_elem *elem1, phos_gui_elem *elem2, Vector2 origin, Vector2 size)
+{
+	// get elem rects
+	Rectangle r1 = phos_gui_get_elem_rect(elem1);
+	Rectangle r2 = phos_gui_get_elem_rect(elem2);
+
+	// check collision between each elem
+	if(CheckCollisionRecs(r1, r2))
+	{
+		vl_log(VL_ERROR, "Elements '%s' and '%s' are colliding!\n", elem1->ID, elem2->ID);
+		return true;
+	}
+
+	return false;
+}
+Vector2 phos_gui_align_elem_with_window(phos_gui_elem *target_elem, phos_gui_alignment alignment)
+{
+	Vector2 v = {0};
+
+	if(!target_elem)
+	{
+		vl_log(VL_ERROR, "Cannot align null target element!\n");
+		return v;
+	}
+	if(!curr_gui)
+	{
+		vl_log(VL_ERROR, "To align an element with the window, a phos_gui must be set! Use phos_gui_set_gui(...)!\n");
+		return v;
+	}
+
+	// ensure elem is in bounds
+	if(!phos_gui_elem_in_bounds(target_elem, PHOS_GUI_WIN_ORIGIN, PHOS_GUI_WIN_SIZE))
+	{
+		vl_log(VL_ERROR, "Failed to align '%s' with window, it must be in the window's bounds!\n", target_elem->ID);
+		return v;
+	}
+
+	// ensure elem is not colliding with any other elems in the curr gui
+	for(size_t i = 0; i < curr_gui->num_elems; ++i)
+	{
+		// get elem at i
+		phos_gui_elem *e = curr_gui->elems[i];
+
+		// do not collide with self
+		if(e == target_elem)
+			continue;
+
+		if(phos_gui_check_elem_collision(e, target_elem, PHOS_GUI_WIN_ORIGIN, PHOS_GUI_WIN_SIZE))
+		{
+			vl_log(VL_ERROR, "Failed to align '%s' with the window, it is colliding with another element!\n", target_elem->ID);
+			return v;
+		}
+	}
+
+	// if alignment is not an INNER alignment, cannot continue
+	if(alignment < PHOS_GUI_ALIGN_INNER_LEFT || alignment > PHOS_GUI_ALIGN_INNER_BOTTOM_RIGHT)
+	{
+		vl_log(VL_ERROR, "Invalid alignment: %d! When aligning an element with the window, the alignment must be a PHOS_GUI_ALIGN_INNER... alignment! Defaulting to PHOS_GUI_ALIGN_INNER_TOP_LEFT!\n", alignment);
+		alignment = PHOS_GUI_ALIGN_TOP_LEFT;
+	}
+
+	target_elem->alignment = alignment;
+	v = phos_gui_get_proposed_align_pos(PHOS_GUI_WIN_RECT, target_elem->alignment, PHOS_GUI_WIN_SIZE);
+	phos_gui_set_elem_pos(target_elem, v.x, v.y);
+
+	return v;
+}
+void phos_gui_fill_window_with_elem(phos_gui_elem *elem)
+{
+	if(!elem)
+	{
+		vl_log(VL_ERROR, "Cannot fill window with a null UI element!\n");
+		return;
+	}
+
+	elem->alignment = PHOS_GUI_ALIGN_INNER_TOP_LEFT;
+	phos_gui_set_elem_bounds(elem, 0.0f, 0.0f, GetScreenWidth(), GetScreenHeight());
 }
 
 static float phos_gui_find_largest_possible_font_size(const phos_gui_elem *const elem, const phos_gui_text_component *const text_component, const char *text_component_target_str)
@@ -1244,13 +1333,10 @@ int phos_gui_add_elem_to_container(phos_gui_elem *elem, phos_gui_elem *container
 		return 0;
 	}
 
-	// see if element is even in the container
-	Rectangle elem_rect = phos_gui_get_elem_rect(elem);
-	Rectangle container_rect = phos_gui_get_elem_rect(container);
-	if(elem_rect.x < container_rect.x || elem_rect.x + elem_rect.x > container_rect.x + container_rect.width
-			|| elem_rect.y < container_rect.y || elem_rect.y + elem_rect.height > container_rect.y + container_rect.height)
+	// see if elem is in container bounds
+	if(!phos_gui_elem_in_bounds(elem, container->pos, container->size))
 	{
-		vl_log(VL_ERROR, "Failed to add element '%s' to container '%s'! The element is out of bounds!\n", elem->ID, container->ID);
+		vl_log(VL_ERROR, "Element '%s' is not in the given container's ('%s') bounds!\n", elem->ID, container->ID);
 		return 0;
 	}
 
@@ -1260,10 +1346,17 @@ int phos_gui_add_elem_to_container(phos_gui_elem *elem, phos_gui_elem *container
 		// get elem at i
 		phos_gui_elem *child = container->children[i];
 
-		// see if a collision occurs
-		if(CheckCollisionRecs(elem_rect, phos_gui_get_elem_rect(child)))
+		// keep in bounds
+		if(!phos_gui_elem_in_bounds(child, container->pos, container->size))
 		{
-			vl_log(VL_ERROR, "Failed to add element '%s' to container '%s'! The element collides with another child element!\n", elem->ID, container->ID);
+			vl_log(VL_ERROR, "Child element '%s' is not in the given container's ('%s') bounds!\n", child->ID, container->ID);
+			return 0;
+		}
+
+		// size-bounds are the content area of the container
+		if(phos_gui_check_elem_collision(elem, child, container->pos, phos_gui_get_rect_size(phos_gui_get_elem_content_area(container))))
+		{
+			vl_log(VL_ERROR, "Element '%s' and child element '%s' are colliding!\n", elem->ID, child->ID);
 			return 0;
 		}
 	}

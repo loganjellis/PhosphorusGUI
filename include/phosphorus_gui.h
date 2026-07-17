@@ -86,6 +86,10 @@
   The window's current size.
 */
 #define PHOS_GUI_WIN_SIZE (Vector2) { GetScreenWidth(), GetScreenHeight() }
+/**
+  A Vector2 representing the window's origin and size.
+*/
+#define PHOS_GUI_WIN_RECT (Rectangle) { 0.0f, 0.0f, GetScreenWidth(), GetScreenHeight() }
 
 /**
   Sets the ID field of the given object.
@@ -617,6 +621,15 @@ typedef struct phos_gui_elem
 	*/
 	phos_gui_elem_render_mode render_mode;
 	/**
+	  This element's alignment.
+
+	  When the element is added to a container or
+	  aligned with another element, this alignment
+	  tells PhosphorusGUI how to align this element
+	  with the reference element.
+	*/
+	phos_gui_alignment alignment;
+	/**
 	  If this element is a container, this determines
 	  how the container is formatted.
 
@@ -927,41 +940,44 @@ PHOS_GUI_API void phos_gui_gen_color_set(phos_gui_color_set *set, Color normal_c
 PHOS_GUI_API void phos_gui_set_text_contents(phos_gui_text_component *text_component, char *target_str, const char *str);
 
 /**
-  Calculates the position of an object if it were aligned with the given reference element
-  using the given alignment. The returned position is not a relative position, it
-  is absolute.
-
-  @param reference_elem The element to align with.
-  @param alignment The alignment to use.
-  @param target_object_size The size of whatever is being aligned with 'reference_elem'.
-  Can be another object, element, text, etc.
-*/
-PHOS_GUI_API Vector2 phos_gui_get_proposed_align_pos(const phos_gui_elem *const reference_elem, phos_gui_alignment alignment, Vector2 target_object_size);
-/**
   Calculates the position of the text component of an element based on an alignment.
 
   @note This function uses the text component's owner as the reference
   element to align with.
+
+  @important The given alignment must be one of the PHOS_GUI_ALIGN_INNER... alignments.
 
   @param text_component The text component to align.
   @param alignment The alignment to use.
   @param target_str The string buffer on the text component to use when aligning. For example, to use placeholder text,
   pass in 'text_component -> placeholder_str'.
 
-  @see phos_gui_get_proposed_align_pos(const phos_gui_elem *const, phos_gui_alignment, Vector2)
   @see phos_gui_align_elem(phos_gui_elem*, phos_gui_alignment, const phos_gui_elem *const)
 */
 PHOS_GUI_API Vector2 phos_gui_align_elem_text(phos_gui_text_component *text_component, phos_gui_alignment alignment, const char *target_str);
 /**
   Calculates the position of 'target_elem' if it were aligned with 'reference_elem'
-  using the given alignment. This function also aligns the element using the given reference
-  element and alignment.
+  using the given alignment, and then uses the calculated position to properly
+  move 'target_elem.'
 
   @param target_elem The element to move and align.
-  @param alignment The alignment to use.
+  @param alignment The alignment to use. The element's 'alignment' field is automatically assigned to the value given.
   @param reference_elem The element 'target_elem' is being aligned with.
 */
 PHOS_GUI_API Vector2 phos_gui_align_elem(phos_gui_elem *target_elem, phos_gui_alignment alignment, const phos_gui_elem *const reference_elem);
+/**
+  Calculates the position of 'target_elem' if it were aligned with the window.
+
+  @important The given alignment must be one of the PHOS_GUI_ALIGN_INNER... alignments.
+*/
+PHOS_GUI_API Vector2 phos_gui_align_elem_with_window(phos_gui_elem *target_elem, phos_gui_alignment alignment);
+/**
+  Fills the window's content area with an element.
+
+  @note This automatically sets the alignment on the given element
+  to PHOS_GUI_ALIGN_INNER_TOP_LEFT.
+*/
+PHOS_GUI_API void phos_gui_fill_window_with_elem(phos_gui_elem *elem);
 
 /**
   Makes the given element fit the given text component's bounds.
