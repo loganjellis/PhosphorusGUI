@@ -759,6 +759,10 @@ PHOS_GUI_API void phos_gui_center_elem(phos_gui_elem *elem, Vector2 origin, Vect
   Moves an element x pixels horizontally and y pixels vertically.
 */
 PHOS_GUI_API void phos_gui_move_elem_xy(phos_gui_elem *elem, float x, float y);
+/**
+  Resizes an element by w pixels horizontally and h pixels vertically.
+*/
+PHOS_GUI_API void phos_gui_resize_elem(phos_gui_elem *elem, float w, float h);
 
 /**
   Returns the center of an element.
@@ -1035,28 +1039,6 @@ PHOS_GUI_API void phos_gui_clone_elem(phos_gui_elem *elem, const char *ID);
   @see phos_gui_remove_elem(phos_gui*, phos_gui_elem*)
 */
 PHOS_GUI_API void phos_gui_init_clone(phos_gui_elem *target_elem, const char *ID);
-
-/**
-  Adds a component of the specified type to an element.
-
-  @important Since some functions check for specific components
-  on elements, it is recommended that you add all necessary components
-  to each element as soon as possible. If you don't, you may see warning
-  or error messages delay-logged that are incorrect at their time of printing.
-
-  @return NULL on failure.
-*/
-PHOS_GUI_API void *phos_gui_add_component(phos_gui_elem *elem, phos_gui_component_type type);
-/**
-  Determines if an element has a specific component.
-*/
-PHOS_GUI_API bool phos_gui_elem_has_component(const phos_gui_elem *const elem, phos_gui_component_type type);
-/**
-  Obtains a component on an element.
-
-  @return NULL if the component is not found on the element.
-*/
-PHOS_GUI_API void *phos_gui_get_component(const phos_gui_elem *const elem, phos_gui_component_type type);
 
 /**
   Sets the global window scale in PhosphorusGUI.

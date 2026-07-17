@@ -238,15 +238,9 @@ static void phos_gui_auto_gen_id(const char *ID, char *target, const char *prefi
 static int phos_gui_search_for_duplicate_id(const char *ID)
 {
 	int found = -1;
-	for(size_t i = 0; i < all_ids.size; ++i)
-	{
-		if(strcmp(all_ids.data[i], ID) == 0)
-		{
-			found = i;
-			return found;
-		}
-	}
-	vl_log(VL_ERROR, "Another object already uses this ID: '%s'!\n", ID);
+	dynas_find_str(&all_ids, ID, found);
+	if(found != -1)
+		vl_log(VL_ERROR, "Another object already uses this ID: '%s'!\n", ID);
 	return found;
 }
 
@@ -371,6 +365,34 @@ void phos_gui_move_elem_xy(phos_gui_elem *elem, float x, float y)
 	// then move elem's child elements the same amount of pixels
 	for(size_t i = 0; i < elem->num_children; ++i)
 		phos_gui_move_elem_xy(elem->children[i], x, y);
+}
+void phos_gui_resize_elem(phos_gui_elem *elem, float w, float h)
+{
+	if(!elem)
+	{
+		vl_log(VL_ERROR, "Cannot resize a null UI element!\n");
+		return;
+	}
+
+	// first, see what new elem size would be
+	float new_w = elem -> size.x + w;
+	float new_h = elem -> size.y + h;
+
+	// see if size is now negative
+	if(new_w <= 0.0f || new_h <= 0.0f)
+	{
+		vl_log(VL_ERROR, "Cannot resize this element ('%s') anymore, its size cannot be negative!\n", elem->ID);
+		return;
+	}
+
+	// apply change
+	elem->size = (Vector2) { new_w, new_h };
+
+	// TODO shrink/expand text component?
+
+	// then shrink/expand the elem's child elements the same amount of pixels
+	for(size_t i = 0; i < elem->num_children; ++i)
+		phos_gui_resize_elem(elem->children[i], w, h);
 }
 
 Vector2 phos_gui_get_elem_center(phos_gui_elem *elem)
@@ -1184,9 +1206,6 @@ int phos_gui_add_elem_to_container(phos_gui_elem *elem, phos_gui_elem *container
 		return 0;
 	}
 
-	// make elem's post relative to container
-	phos_gui_set_elem_pos(elem, container->pos.x + elem->pos.x + elem->outline_thickness, container->pos.y + elem->pos.y + elem->outline_thickness);
-
 	// see if element is even in the container
 	Rectangle elem_rect = phos_gui_get_elem_rect(elem);
 	Rectangle container_rect = phos_gui_get_elem_rect(container);
@@ -1806,7 +1825,7 @@ static void phos_gui_render_elem(const phos_gui_elem *const e)
 						DrawTextEx(*text->font, text->str, text->pos, text->font_size, 0.0f, text->color);
 						break;
 					case PHOS_GUI_TYPE_TEXT_FIELD:
-						// calculate where to draw the text (text pos is relative, so add to element pos to get real draw pos):
+						// calculate where to draw the text
 						Vector2 draw_pos = e->pos;
 						draw_pos.x -= text->scroll;
 
